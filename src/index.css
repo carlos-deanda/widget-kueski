@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/* Esto es lo único que Tailwind no puede adivinar por ti: 
+   el tamaño de la ventana de Chrome */
+body {
+  margin: 0;
+  padding: 0;
+  width: 320px;  /* Ajusta a tu gusto */
+  height: 400px; /* Ajusta a tu gusto */
+  overflow: hidden;
+}

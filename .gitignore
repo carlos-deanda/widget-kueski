@@ -1,0 +1,21 @@
+# Dependencias
+node_modules/
+
+# Producción
+dist/
+
+# Logs (Errores de npm)
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Mac
+.DS_Store
+
+# Variables de entorno (Por si luego usas una API Key)
+.env
+.env.local
+
+# Configuración de Editores
+.vscode/
+.idea/
