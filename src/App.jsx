@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import ProductPage from './pages/ProductPage.jsx';
 import TopBar from './components/TopBar.jsx';
+import PriceTrackingPage from './pages/PriceTrackingPage.jsx';
 
 function App() {
   // Añadimos un pequeño estado para que el widget sea interactivo
@@ -9,6 +10,10 @@ function App() {
 
   if (screen === 'product') {
     return <ProductPage onBack={() => setScreen('home')} />;
+  } 
+  else if(screen === 'tracking') {
+    return <PriceTrackingPage onBack={() => setScreen('home')} />;
+
   }
 
   return (
@@ -43,6 +48,17 @@ function App() {
         >
           Ir a producto
         </button>
+
+        {/* Para ir a mi vista */}
+        <button
+          onClick={() => setScreen('tracking')}
+          className="w-full mb-3 bg-slate-200 text-slate-800 font-bold py-3 rounded-xl
+                     hover:bg-slate-300 active:scale-95 transition-all"
+        >
+          Trackear producto
+        </button>
+
+
         <button 
           onClick={() => setContador(contador + 1)}
           className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl 
