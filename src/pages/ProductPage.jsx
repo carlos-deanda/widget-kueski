@@ -1,9 +1,12 @@
 import React from 'react';
+import TopBar from '../components/TopBar.jsx';
 
 function ProductPage({ onBack }) {
   return (
-    <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 p-2">
-      <div className="h-full rounded-2xl border border-slate-200 bg-[#f5f5f5] p-4 overflow-y-auto">
+    <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 flex flex-col">
+      <TopBar />
+
+      <div className="grow rounded-b-2xl border-x border-b border-slate-200 bg-[#f5f5f5] p-4 overflow-y-auto">
         <button
           onClick={onBack}
           className="w-full bg-slate-200 text-slate-800 font-bold py-3 rounded-xl

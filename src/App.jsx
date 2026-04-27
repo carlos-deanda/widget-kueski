@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ProductPage from './pages/ProductPage.jsx';
+import TopBar from './components/TopBar.jsx';
 
 function App() {
   // Añadimos un pequeño estado para que el widget sea interactivo
@@ -17,11 +18,7 @@ function App() {
     */
     <div className="w-full h-full bg-white flex flex-col font-sans">
       
-      {/* --- CABECERA --- */}
-      <header className="p-5 bg-indigo-600 text-white shadow-md">
-        <h1 className="text-xl font-black tracking-tight">MI WIDGET PRO</h1>
-        <p className="text-xs text-indigo-100 opacity-80">React + Tailwind v4</p>
-      </header>
+      <TopBar />
 
       {/* --- CUERPO --- */}
       <main className="grow p-6 flex flex-col items-center justify-center text-center">
@@ -31,7 +28,7 @@ function App() {
           </span>
         </div>
         
-        <h2 className="text-2xl font-bold text-slate-800">¡Hola, Dani!</h2>
+        <h2 className="text-2xl font-bold text-slate-800">¡Hola, Username!</h2>
         <p className="text-slate-500 mt-2 text-sm">
           Has interactuado <span className="font-bold text-indigo-600">{contador}</span> veces con este widget.
         </p>
