@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ProductPage from './ProductPage.jsx';
+import CheckoutPage from './CheckoutPage.jsx';
 import TopBar from '../components/TopBar.jsx';
 
 const activePurchases = [
@@ -50,17 +51,30 @@ function MenuPage() {
     return <ProductPage onBack={() => setScreen('home')} />;
   }
 
+  if (screen === 'checkout') {
+    return <CheckoutPage onBack={() => setScreen('home')} />;
+  }
+
   return (
     <div className="w-full h-full bg-white flex flex-col font-sans text-slate-900">
       <TopBar />
 
       <main className="grow overflow-y-auto p-4">
         <section className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
+          {/* He añadido 'w-full' y 'justify-between' aquí para que el título y el botón se separen */}
+          <div className="flex items-center justify-between w-full">
             <div>
               <h1 className="text-2xl font-bold leading-tight">Dashboard Menu</h1>
               <p className="text-sm text-slate-500">Manage your products</p>
             </div>
+
+            {/* Este es el botón nuevo */}
+            <button 
+              onClick={() => setScreen('checkout')}
+              className="text-[10px] bg-slate-100 text-slate-400 px-2 py-1 rounded hover:bg-slate-200"
+            >
+              test checkout
+            </button>
           </div>
         </section>
 
