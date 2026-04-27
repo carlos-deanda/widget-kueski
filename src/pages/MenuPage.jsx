@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ProductPage from './ProductPage.jsx';
+import PriceTrackingPage from './PriceTrackingPage.jsx';
 import TopBar from '../components/TopBar.jsx';
 
 const activePurchases = [
@@ -48,6 +49,10 @@ function MenuPage() {
 
   if (screen === 'product') {
     return <ProductPage onBack={() => setScreen('home')} />;
+  }
+
+  if (screen === 'tracking') {
+    return <PriceTrackingPage onBack={() => setScreen('home')} />;
   }
 
   return (
@@ -120,13 +125,15 @@ function MenuPage() {
               const isDeal = product.trend === 'down';
 
               return (
-                <div
+                <button
                   key={product.name}
+                  type="button"
+                  onClick={() => setScreen('tracking')}
                   className={`rounded-lg border p-4 ${
                     isDeal
                       ? 'border-green-200 bg-green-50'
                       : 'border-pink-100 bg-pink-50'
-                  }`}
+                  } w-full text-left transition-colors hover:brightness-95 active:scale-[0.99]`}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
@@ -147,7 +154,7 @@ function MenuPage() {
                     </div>
                     <span className="shrink-0 text-3xl leading-none text-slate-400">›</span>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
