@@ -1,62 +1,62 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ProductPage from './ProductPage.jsx';
 import CheckoutPage from './CheckoutPage.jsx';
 import PriceTrackingPage from './PriceTrackingPage.jsx';
 import TopBar from '../components/TopBar.jsx';
+import { getDashboard } from '../api.js';
 
-const activePurchases = [
-  {
-    name: 'Premium Headphones',
-    paymentsLeft: '3 payments left',
-    amount: '$162.50 biweekly',
-  },
-  {
-    name: 'Smart Watch Pro',
-    paymentsLeft: '5 payments left',
-    amount: '$106.25 biweekly',
-  },
-  {
-    name: 'Ultra HD Monitor',
-    paymentsLeft: '8 payments left',
-    amount: '$260.42 biweekly',
-  },
-];
-
-const trackedProducts = [
-  {
-    name: 'Gaming Laptop RTX',
-    price: '$1899.99',
-    change: '5.2%',
-    trend: 'down',
-    badge: 'Good Deal',
-  },
-  {
-    name: 'Mechanical Keyboard',
-    price: '$189.99',
-    change: '2.1%',
-    trend: 'up',
-  },
-  {
-    name: 'Office Chair Pro',
-    price: '$449.99',
-    change: '8.5%',
-    trend: 'down',
-    badge: 'Good Deal',
-  },
-];
-
-function MenuPage() {
+function MenuPage({ user, onLogout }) {
   const [screen, setScreen] = useState('home');
+  const [selectedPurchaseId, setSelectedPurchaseId] = useState(null);
+  const [selectedTrackingId, setSelectedTrackingId] = useState(null);
+  const [dashboard, setDashboard] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    setIsLoading(true);
+    getDashboard(user.id)
+      .then((data) => {
+        if (!isMounted) return;
+        setDashboard(data);
+        setError('');
+      })
+      .catch((apiError) => {
+        if (!isMounted) return;
+        setError(apiError.message);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user.id]);
+
+  const activePurchases = dashboard?.activePurchases || [];
+  const trackedProducts = dashboard?.trackedProducts || [];
+  const checkoutProduct = trackedProducts.find((product) => product.id === selectedTrackingId) || trackedProducts[0];
 
   if (screen === 'product') {
-    return <ProductPage onBack={() => setScreen('home')} />;
+    return <ProductPage purchaseId={selectedPurchaseId} onBack={() => setScreen('home')} />;
   }
 
   if (screen === 'checkout') {
-    return <CheckoutPage onBack={() => setScreen('home')} />;
+    return <CheckoutPage user={dashboard?.user || user} product={checkoutProduct} onBack={() => setScreen('home')} />;
   }
   if (screen === 'tracking') {
-    return <PriceTrackingPage onBack={() => setScreen('home')} />;
+    return (
+      <PriceTrackingPage
+        trackingId={selectedTrackingId}
+        onBack={() => setScreen('home')}
+        onCheckout={() => setScreen('checkout')}
+      />
+    );
   }
 
   return (
@@ -69,31 +69,62 @@ function MenuPage() {
           <div className="flex items-center justify-between w-full">
             <div>
               <h1 className="text-2xl font-bold leading-tight">Dashboard Menu</h1>
-              <p className="text-sm text-slate-500">Manage your products</p>
+              <p className="text-sm text-slate-500">{user.name} · nivel {user.creditRating}</p>
             </div>
 
-            {/* Este es el botón nuevo */}
-            <button 
-              onClick={() => setScreen('checkout')}
-              className="text-[10px] bg-slate-100 text-slate-400 px-2 py-1 rounded hover:bg-slate-200"
-            >
-              test checkout
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setScreen('checkout')}
+                className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200"
+              >
+                checkout
+              </button>
+              <button
+                onClick={onLogout}
+                className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200"
+              >
+                salir
+              </button>
+            </div>
           </div>
         </section>
+
+        <section className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-500">Oferta disponible</p>
+              <p className="mt-1 text-2xl font-black text-[#0057ff]">${Number(user.creditRemaining || 0).toLocaleString('en-US')}</p>
+            </div>
+            <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700">
+              Rating {user.creditRating}/5
+            </div>
+          </div>
+        </section>
+
+        {isLoading && (
+          <p className="mt-6 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-700">
+            Cargando datos...
+          </p>
+        )}
+
+        {error && (
+          <p className="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+            {error}
+          </p>
+        )}
 
         <section className="mt-7 grid grid-cols-3 gap-3">
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-center">
             <p className="mt-2 text-sm font-bold leading-tight">Active</p>
-            <p className="text-sm text-slate-500">3 products</p>
+            <p className="text-sm text-slate-500">{activePurchases.length} products</p>
           </div>
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-center">
             <p className="mt-2 text-sm font-bold leading-tight">Tracking</p>
-            <p className="text-sm text-slate-500">3 products</p>
+            <p className="text-sm text-slate-500">{trackedProducts.length} products</p>
           </div>
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-center">
             <p className="mt-2 text-sm font-bold leading-tight">Total</p>
-            <p className="text-sm text-slate-500">6 items</p>
+            <p className="text-sm text-slate-500">{activePurchases.length + trackedProducts.length} items</p>
           </div>
         </section>
 
@@ -105,9 +136,12 @@ function MenuPage() {
           <div className="space-y-3">
             {activePurchases.map((purchase) => (
               <button
-                key={purchase.name}
+                key={purchase.id}
                 type="button"
-                onClick={() => setScreen('product')}
+                onClick={() => {
+                  setSelectedPurchaseId(purchase.id);
+                  setScreen('product');
+                }}
                 className="w-full rounded-lg border border-blue-100 bg-blue-50 p-4 text-left transition-colors hover:bg-blue-100 active:scale-[0.99]"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -139,9 +173,12 @@ function MenuPage() {
 
               return (
                 <button
-                  key={product.name}
+                  key={product.id}
                   type="button"
-                  onClick={() => setScreen('tracking')}
+                  onClick={() => {
+                    setSelectedTrackingId(product.id);
+                    setScreen('tracking');
+                  }}
                   className={`rounded-lg border p-4 ${
                     isDeal
                       ? 'border-green-200 bg-green-50'
