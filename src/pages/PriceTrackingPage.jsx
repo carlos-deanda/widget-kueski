@@ -32,10 +32,11 @@ function PriceTrackingPage({ trackingId, onBack, onCheckout }) {
     };
   }, [trackingId]);
 
-  const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
-  const progress = tracking
-    ? Math.min(Math.round((tracking.targetPrice / tracking.currentPrice) * 100), 100)
-    : 0;
+  const formatMoney = (value) => {
+    const numericValue = Number(value || 0);
+    const sign = numericValue < 0 ? '-' : '';
+    return `${sign}$${Math.abs(numericValue).toFixed(2)}`;
+  };
 
   return (
     <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 flex flex-col">
@@ -101,27 +102,9 @@ function PriceTrackingPage({ trackingId, onBack, onCheckout }) {
 
               <div className="rounded-xl border border-[#c8d6ff] bg-[#e8eefc] p-3 text-center">
                 <p className="text-2xl text-[#0057ff]">ϟ</p>
-                <p className="text-sm font-medium mt-1">Savings</p>
-                <p className="text-xs text-slate-500">{formatMoney(tracking.savingsVsHigh)}</p>
+                <p className="text-sm font-medium mt-1">Ahorro</p>
+                <p className="text-xs text-slate-500">{formatMoney(tracking.savings)}</p>
               </div>
-            </div>
-
-            <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-3">
-              <p className="text-sm font-semibold text-green-700">
-                {tracking.isNearTarget ? 'Good time to buy!' : 'Still above target'}
-              </p>
-              <p className="text-xs text-green-700">
-                {tracking.isNearTarget ? 'Price is close to your target' : 'We are still monitoring this product'}
-              </p>
-            </div>
-
-            <div className="mt-5 flex items-center justify-between">
-              <p className="text-sm font-semibold">Target: {formatMoney(tracking.targetPrice)}</p>
-              <p className="text-sm text-slate-500">{formatMoney(tracking.amountAway)} away</p>
-            </div>
-
-            <div className="mt-2 h-3 rounded-full bg-slate-300 overflow-hidden">
-              <div className="h-full bg-green-500" style={{ width: `${progress}%` }} />
             </div>
 
             <div className="mt-4 rounded-2xl bg-[#e4e8f0] p-4">
@@ -129,9 +112,7 @@ function PriceTrackingPage({ trackingId, onBack, onCheckout }) {
 
               <div className="mt-1 flex items-end gap-2">
                 <p className="text-3xl font-bold text-[#0057ff]">{formatMoney(tracking.currentPrice)}</p>
-                <p className="text-green-600 mb-2 text-xs font-medium">
-                  {tracking.isNearTarget ? 'Near target' : 'Monitoring'}
-                </p>
+                <p className="text-green-600 mb-2 text-xs font-medium">Monitoring</p>
               </div>
 
               <p className="mt-2 text-slate-500 text-sm">
@@ -146,8 +127,8 @@ function PriceTrackingPage({ trackingId, onBack, onCheckout }) {
               </div>
 
               <div className="flex items-center justify-between">
-                <p className="text-slate-500">Target price</p>
-                <p className="font-semibold text-[#0057ff]">{formatMoney(tracking.targetPrice)}</p>
+                <p className="text-slate-500">First seen price</p>
+                <p className="font-semibold text-[#0057ff]">{formatMoney(tracking.firstSeenPrice)}</p>
               </div>
 
               <div className="flex items-center justify-between">
@@ -156,8 +137,8 @@ function PriceTrackingPage({ trackingId, onBack, onCheckout }) {
               </div>
 
               <div className="pt-2 mt-2 border-t border-slate-200 flex items-center justify-between">
-                <p className="text-md font-medium">Savings vs high</p>
-                <p className="text-xl font-bold text-green-600">{formatMoney(tracking.savingsVsHigh)}</p>
+                <p className="text-md font-medium">Ahorro</p>
+                <p className="text-xl font-bold text-green-600">{formatMoney(tracking.savings)}</p>
               </div>
             </div>
 

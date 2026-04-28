@@ -65,10 +65,12 @@ CREATE TABLE IF NOT EXISTS price_trackings (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id),
   product_id INTEGER REFERENCES products(id),
-  target_price NUMERIC(10, 2) NOT NULL,
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE price_trackings
+  DROP COLUMN IF EXISTS target_price;
 
 CREATE TABLE IF NOT EXISTS price_history (
   id SERIAL PRIMARY KEY,

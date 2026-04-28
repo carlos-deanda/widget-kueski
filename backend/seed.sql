@@ -48,17 +48,17 @@ VALUES
   (8, 5, 6, 'active', 449.99, 22.50, 472.49, 78.75, 6, 1, '2026-05-20')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO price_trackings (id, user_id, product_id, target_price, is_active)
+INSERT INTO price_trackings (id, user_id, product_id, is_active)
 VALUES
-  (1, 1, 4, 1699.99, TRUE),
-  (2, 1, 5, 179.99, TRUE),
-  (3, 1, 6, 399.99, TRUE),
-  (4, 2, 1, 1199.99, TRUE),
-  (5, 2, 3, 2299.99, TRUE),
-  (6, 3, 2, 799.99, TRUE),
-  (7, 4, 1, 1099.99, TRUE),
-  (8, 4, 4, 1699.99, TRUE),
-  (9, 5, 5, 169.99, TRUE)
+  (1, 1, 4, TRUE),
+  (2, 1, 5, TRUE),
+  (3, 1, 6, TRUE),
+  (4, 2, 1, TRUE),
+  (5, 2, 3, TRUE),
+  (6, 3, 2, TRUE),
+  (7, 4, 1, TRUE),
+  (8, 4, 4, TRUE),
+  (9, 5, 5, TRUE)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO price_history (product_id, price, recorded_at)

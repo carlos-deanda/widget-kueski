@@ -8,7 +8,6 @@ const { google } = require('googleapis');
 const app = express();
 const port = process.env.PORT || 3001;
 const host = process.env.HOST || '127.0.0.1';
-const clientUrl = process.env.CLIENT_URL || 'http://127.0.0.1:5173';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -96,7 +95,6 @@ function formatTrackedProduct(row) {
   const previousPrice = money(row.previous_price || row.current_price);
   const changeAmount = currentPrice - previousPrice;
   const change = previousPrice === 0 ? 0 : Math.abs((changeAmount / previousPrice) * 100);
-  const isDeal = currentPrice <= money(row.target_price) || changeAmount < 0;
 
   return {
     id: row.id,
@@ -104,10 +102,9 @@ function formatTrackedProduct(row) {
     name: row.name,
     price: `$${currentPrice.toFixed(2)}`,
     currentPrice,
-    targetPrice: money(row.target_price),
     change: `${change.toFixed(1)}%`,
     trend: changeAmount <= 0 ? 'down' : 'up',
-    badge: isDeal ? 'Good Deal' : null,
+    badge: changeAmount < 0 ? 'Good Deal' : null,
     isActive: row.is_active,
   };
 }
@@ -239,7 +236,6 @@ app.get('/api/users/:userId/dashboard', async (req, res) => {
             pt.product_id,
             pr.name,
             pr.current_price,
-            pt.target_price,
             pt.is_active,
             latest_prices.previous_price
           FROM price_trackings pt
@@ -523,7 +519,7 @@ app.get('/api/integrations/google/calendar/callback', async (req, res) => {
   try {
     const parsedState = decodeOAuthState(String(state));
     purchaseId = Number(parsedState.purchaseId);
-  } catch (error) {
+  } catch {
     res.status(400).send('Invalid OAuth state.');
     return;
   }
@@ -587,7 +583,6 @@ app.get('/api/integrations/google/calendar/callback', async (req, res) => {
         });
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-    let createdEvents = 0;
 
     for (const payment of pendingPayments) {
       const startDate = new Date(payment.dueDate);
@@ -625,7 +620,6 @@ app.get('/api/integrations/google/calendar/callback', async (req, res) => {
         },
       });
 
-      createdEvents += 1;
     }
 
     res.redirect('https://calendar.google.com/calendar/u/0/r');
@@ -643,10 +637,22 @@ app.get('/api/price-trackings/:trackingId', async (req, res) => {
         WITH price_stats AS (
           SELECT
             product_id,
-            MIN(price) AS historical_low,
-            MAX(price) AS historical_high
+            MIN(price) AS historical_low
           FROM price_history
           GROUP BY product_id
+        ),
+        first_prices AS (
+          SELECT
+            product_id,
+            price AS first_seen_price
+          FROM (
+            SELECT
+              ph.product_id,
+              ph.price,
+              ROW_NUMBER() OVER (PARTITION BY ph.product_id ORDER BY ph.recorded_at ASC) AS rn
+            FROM price_history ph
+          ) ranked_prices
+          WHERE rn = 1
         ),
         latest_prices AS (
           SELECT
@@ -658,16 +664,16 @@ app.get('/api/price-trackings/:trackingId', async (req, res) => {
         )
         SELECT
           pt.id,
-          pt.target_price,
           pt.is_active,
           pr.name,
           pr.current_price,
           price_stats.historical_low,
-          price_stats.historical_high,
+          first_prices.first_seen_price,
           latest_prices.previous_price
         FROM price_trackings pt
         JOIN products pr ON pr.id = pt.product_id
         LEFT JOIN price_stats ON price_stats.product_id = pr.id
+        LEFT JOIN first_prices ON first_prices.product_id = pr.id
         LEFT JOIN latest_prices ON latest_prices.product_id = pr.id AND latest_prices.rn = 1
         WHERE pt.id = $1
       `,
@@ -681,24 +687,21 @@ app.get('/api/price-trackings/:trackingId', async (req, res) => {
 
     const row = tracking.rows[0];
     const currentPrice = money(row.current_price);
-    const targetPrice = money(row.target_price);
+    const firstSeenPrice = money(row.first_seen_price || row.current_price);
     const previousPrice = money(row.previous_price || row.current_price);
     const changeAmount = currentPrice - previousPrice;
     const changePercent = previousPrice === 0 ? 0 : Math.abs((changeAmount / previousPrice) * 100);
-    const historicalHigh = money(row.historical_high || row.current_price);
 
     res.json({
       tracking: {
         id: row.id,
         productName: row.name,
         currentPrice,
-        targetPrice,
+        firstSeenPrice,
         historicalLow: money(row.historical_low || row.current_price),
-        savingsVsHigh: Math.max(historicalHigh - currentPrice, 0),
-        amountAway: Math.max(currentPrice - targetPrice, 0),
+        savings: firstSeenPrice - currentPrice,
         change: `${changePercent.toFixed(1)}%`,
         trend: changeAmount <= 0 ? 'down' : 'up',
-        isNearTarget: currentPrice <= targetPrice * 1.12,
         isActive: row.is_active,
       },
     });
