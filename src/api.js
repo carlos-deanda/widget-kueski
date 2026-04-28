@@ -51,3 +51,7 @@ export function getPurchase(purchaseId) {
 export function getPriceTracking(trackingId) {
   return request(`/api/price-trackings/${trackingId}`);
 }
+
+export function getGoogleCalendarStartUrl(purchaseId) {
+  return `${API_BASE_URL}/api/purchases/${purchaseId}/calendar/google/start`;
+}

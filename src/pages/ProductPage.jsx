@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import TopBar from '../components/TopBar.jsx';
-import { getPurchase } from '../api.js';
+import { getGoogleCalendarStartUrl, getPurchase } from '../api.js';
 
 function ProductPage({ purchaseId, onBack }) {
   const [purchase, setPurchase] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [calendarMessage, setCalendarMessage] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -36,6 +37,37 @@ function ProductPage({ purchaseId, onBack }) {
   const nextPayment = purchase?.nextPaymentDate
     ? new Date(purchase.nextPaymentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : 'Pendiente';
+
+  const handleAddToCalendar = () => {
+    if (!purchaseId) {
+      setCalendarMessage('No se encontro la compra para sincronizar el calendario.');
+      return;
+    }
+
+    const url = getGoogleCalendarStartUrl(purchaseId);
+
+    if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+      chrome.tabs.create({ url }, () => {
+        if (chrome.runtime?.lastError) {
+          window.location.assign(url);
+          setCalendarMessage('No se pudo abrir pestaña nueva; se abrio el flujo en esta ventana.');
+          return;
+        }
+
+        setCalendarMessage('Se abrio una pestaña para autorizar Google Calendar.');
+      });
+      return;
+    }
+
+    const popup = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!popup) {
+      window.location.assign(url);
+      setCalendarMessage('Tu navegador bloqueo la ventana emergente; se redirigio en la misma pestaña.');
+      return;
+    }
+
+    setCalendarMessage('Se abrio Google para autorizar y agregar los pagos pendientes al calendario.');
+  };
 
   return (
     <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 flex flex-col">
@@ -129,9 +161,17 @@ function ProductPage({ purchaseId, onBack }) {
               </div>
             </div>
 
-            <button className="mt-4 w-full rounded-xl border border-slate-300 bg-[#f5f5f5] py-3 text-slate-700 hover:bg-slate-100 transition-colors">
+            <button
+              onClick={handleAddToCalendar}
+              className="mt-4 w-full rounded-xl border border-slate-300 bg-[#f5f5f5] py-3 text-slate-700 hover:bg-slate-100 transition-colors"
+            >
               Add to calendar
             </button>
+            {calendarMessage && (
+              <p className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-700">
+                {calendarMessage}
+              </p>
+            )}
           </div>
         )}
       </div>

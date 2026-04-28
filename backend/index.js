@@ -3,10 +3,12 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+const { google } = require('googleapis');
 
 const app = express();
 const port = process.env.PORT || 3001;
 const host = process.env.HOST || '127.0.0.1';
+const clientUrl = process.env.CLIENT_URL || 'http://127.0.0.1:5173';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -36,6 +38,36 @@ function mapUser(row) {
 
 function money(value) {
   return Number(value || 0);
+}
+
+function getGoogleOAuthClient() {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
+
+  if (!clientId || !clientSecret || !redirectUri) {
+    throw new Error('Google Calendar integration is not configured in environment variables');
+  }
+
+  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+}
+
+function encodeOAuthState(payload) {
+  return Buffer.from(JSON.stringify(payload)).toString('base64url');
+}
+
+function decodeOAuthState(value) {
+  return JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+}
+
+function formatDateOnly(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(date, days) {
+  const result = new Date(date);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result;
 }
 
 function formatDashboardPurchase(row) {
@@ -438,6 +470,141 @@ app.get('/api/purchases/:purchaseId', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/purchases/:purchaseId/calendar/google/start', async (req, res) => {
+  const { purchaseId } = req.params;
+
+  try {
+    const purchase = await pool.query(
+      `
+        SELECT id
+        FROM purchases
+        WHERE id = $1
+      `,
+      [purchaseId]
+    );
+
+    if (purchase.rowCount === 0) {
+      res.status(404).json({ error: 'Purchase not found' });
+      return;
+    }
+
+    const oauth2Client = getGoogleOAuthClient();
+    const state = encodeOAuthState({ purchaseId });
+    const authUrl = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/calendar.events'],
+      prompt: 'consent',
+      state,
+    });
+
+    res.redirect(authUrl);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/integrations/google/calendar/callback', async (req, res) => {
+  const { code, state } = req.query;
+
+  if (!code || !state) {
+    res.status(400).send('Missing Google OAuth parameters.');
+    return;
+  }
+
+  let purchaseId;
+
+  try {
+    const parsedState = decodeOAuthState(String(state));
+    purchaseId = Number(parsedState.purchaseId);
+  } catch (error) {
+    res.status(400).send('Invalid OAuth state.');
+    return;
+  }
+
+  try {
+    const oauth2Client = getGoogleOAuthClient();
+    const { tokens } = await oauth2Client.getToken(String(code));
+    oauth2Client.setCredentials(tokens);
+
+    const purchaseResult = await pool.query(
+      `
+        SELECT
+          p.id,
+          p.product_id,
+          p.installment_amount,
+          p.total_installments,
+          p.completed_installments,
+          p.next_payment_date,
+          pr.name AS product_name
+        FROM purchases p
+        JOIN products pr ON pr.id = p.product_id
+        WHERE p.id = $1
+      `,
+      [purchaseId]
+    );
+
+    if (purchaseResult.rowCount === 0) {
+      res.status(404).send('Purchase not found.');
+      return;
+    }
+
+    const purchase = purchaseResult.rows[0];
+    const pendingPaymentsResult = await pool.query(
+      `
+        SELECT installment_number, amount, due_date
+        FROM payments
+        WHERE purchase_id = $1 AND status = 'pending'
+        ORDER BY due_date ASC
+      `,
+      [purchaseId]
+    );
+
+    const remainingInstallments = purchase.total_installments - purchase.completed_installments;
+    const pendingPayments = pendingPaymentsResult.rows.length > 0
+      ? pendingPaymentsResult.rows.map((row) => ({
+          installmentNumber: row.installment_number,
+          amount: money(row.amount),
+          dueDate: row.due_date,
+        }))
+      : Array.from({ length: Math.max(remainingInstallments, 0) }, (_, index) => {
+          const sequence = purchase.completed_installments + index + 1;
+          const baseDate = purchase.next_payment_date
+            ? new Date(purchase.next_payment_date)
+            : addDays(new Date(), 14 * index);
+          const dueDate = purchase.next_payment_date ? addDays(baseDate, 14 * index) : baseDate;
+          return {
+            installmentNumber: sequence,
+            amount: money(purchase.installment_amount),
+            dueDate,
+          };
+        });
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+    let createdEvents = 0;
+
+    for (const payment of pendingPayments) {
+      const startDate = new Date(payment.dueDate);
+      const endDate = addDays(startDate, 1);
+
+      await calendar.events.insert({
+        calendarId: 'primary',
+        requestBody: {
+          summary: `Pago Kueski: ${purchase.product_name}`,
+          description: `Pago ${payment.installmentNumber} de ${purchase.total_installments} por $${payment.amount.toFixed(2)}.`,
+          start: { date: formatDateOnly(startDate) },
+          end: { date: formatDateOnly(endDate) },
+        },
+      });
+
+      createdEvents += 1;
+    }
+
+    res.redirect('https://calendar.google.com/calendar/u/0/r');
+  } catch (error) {
+    res.status(500).send(`No se pudieron crear los eventos: ${error.message}`);
   }
 });
 
