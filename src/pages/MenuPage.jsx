@@ -3,6 +3,7 @@ import ProductPage from './ProductPage.jsx';
 import CheckoutPage from './CheckoutPage.jsx';
 import PriceTrackingPage from './PriceTrackingPage.jsx';
 import TopBar from '../components/TopBar.jsx';
+import CreditPage from './CreditPage.jsx';
 
 const activePurchases = [
   {
@@ -55,8 +56,11 @@ function MenuPage() {
   if (screen === 'checkout') {
     return <CheckoutPage onBack={() => setScreen('home')} />;
   }
+  // if (screen === 'tracking') {
+  //   return <PriceTrackingPage onBack={() => setScreen('home')} />;
+  // }
   if (screen === 'tracking') {
-    return <PriceTrackingPage onBack={() => setScreen('home')} />;
+    return <CreditPage onBack={() => setScreen('home')} />;
   }
 
   return (
