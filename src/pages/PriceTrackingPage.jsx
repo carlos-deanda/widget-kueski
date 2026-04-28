@@ -1,7 +1,7 @@
 import React from 'react';
 import TopBar from '../components/TopBar.jsx';
 
-function PriceTrackingPage({ onBack }) {
+function PriceTrackingPage({ onBack, onCheckout }) {
   return (
     <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 flex flex-col">
       <TopBar />
@@ -93,7 +93,7 @@ function PriceTrackingPage({ onBack }) {
             <p className="text-slate-500">Current Price</p>
 
             <div className="mt-1 flex items-end gap-2">
-              <p className="text-3xl font-bold text-[#0057ff]">$1899.99</p>
+              <p className="text-2xl font-bold text-[#0057ff]">$1899.99</p>
               <p className="text-green-600 mb-2 text-xs font-medium">
                 ✓ Near target
               </p>
@@ -126,7 +126,8 @@ function PriceTrackingPage({ onBack }) {
             </div>
           </div>
 
-          <button className="mt-4 w-full rounded-xl bg-[#0057ff] py-3 text-white font-bold hover:bg-blue-700 active:scale-95 transition-all">
+          <button onClick = {onCheckout} 
+                  className="mt-4 w-full rounded-xl bg-[#0057ff] py-3 text-white font-bold hover:bg-blue-700 active:scale-95 transition-all">
             Buy with Kueski Pay
           </button>
         </div>
