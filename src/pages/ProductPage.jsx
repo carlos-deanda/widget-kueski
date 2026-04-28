@@ -57,7 +57,7 @@ function ProductPage({ onBack }) {
           <div className="mt-4 rounded-2xl bg-[#e4e8f0] p-4">
             <p className="text-slate-500">Pago quincenal</p>
             <div className="mt-1 flex items-end gap-2">
-              <p className="text-5xl font-bold text-[#0057ff]">$186.87</p>
+              <p className="text-2xl font-bold text-[#0057ff]">$186.87</p>
               <p className="text-slate-500 mb-1">(8 pagos)</p>
             </div>
             <p className="mt-2 text-[#0057ff]">On track with payments</p>

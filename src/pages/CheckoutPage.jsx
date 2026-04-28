@@ -1,13 +1,20 @@
 import React, { useState } from 'react';
 import TopBar from '../components/TopBar.jsx';
 
-function CheckoutPage({ onBack }) {
-  // Estado para controlar las semanas (mínimo 4, máximo 52)
+function CheckoutPage({ price, onBack }) {
+  // 1. Limpiamos el precio que viene de Amazon para poder operar matemáticamente
+  // Si viene "$1,899.99", lo convertimos a 1899.99
+  const basePrice = parseFloat(price.replace(/[^0-9.-]+/g, "")) || 1299.99;
+  
   const [weeks, setWeeks] = useState(12);
   
-  // Cálculo dinámico simple para tus pruebas
+  // 2. Cálculos dinámicos basados en el precio REAL
+  const comisionPorcentaje = 0.1008; // 10.08%
+  const comisionMonto = basePrice * comisionPorcentaje;
+  const costoTotal = basePrice + comisionMonto;
+  
   const biweeklyPayments = Math.ceil(weeks / 2);
-  const amount = (1431.07 / biweeklyPayments).toFixed(2);
+  const amountPerPayment = (costoTotal / biweeklyPayments).toFixed(2);
 
   return (
     <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 flex flex-col">
@@ -29,10 +36,11 @@ function CheckoutPage({ onBack }) {
 
           <div className="mt-5 mb-6">
             <p className="text-sm text-slate-500 font-medium">Product</p>
-            <p className="text-2xl font-bold text-slate-900 mt-0.5">Premium Wireless Headphones</p>
+            {/* Aquí podrías también pasar el nombre del producto si quisieras */}
+            <p className="text-2xl font-bold text-slate-900 mt-0.5">Amazon Product</p>
           </div>
 
-          {/* Grid de Beneficios */}
+          {/* Grid de Beneficios (Igual al tuyo) */}
           <div className="grid grid-cols-3 gap-2 mb-8">
             <div className="rounded-xl border border-[#c8d6ff] bg-[#e8eefc] p-3 text-center">
               <span className="block text-blue-600 text-lg mb-1">🛡️</span>
@@ -62,7 +70,6 @@ function CheckoutPage({ onBack }) {
             </div>
             
             <div className="relative w-full h-6 flex items-center">
-              {/* Input invisible que captura el movimiento */}
               <input
                 type="range"
                 min="4"
@@ -72,7 +79,6 @@ function CheckoutPage({ onBack }) {
                 onChange={(e) => setWeeks(parseInt(e.target.value))}
                 className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer z-20 accent-slate-900"
               />
-              {/* Barra visual de fondo para que se vea como en la foto */}
               <div className="absolute w-full h-2 bg-slate-200 rounded-full z-10">
                 <div 
                   className="h-full bg-slate-900 rounded-full" 
@@ -87,12 +93,12 @@ function CheckoutPage({ onBack }) {
             </div>
           </div>
 
-          {/* Caja de Pago dinámico */}
+          {/* Caja de Pago dinámico con el monto real calculado */}
           <div className="rounded-2xl bg-[#e4e8f0] p-5 text-left mb-6 border border-slate-200 shadow-inner">
             <p className="text-slate-500 text-sm font-medium">Pago quincenal</p>
             <div className="mt-1 flex items-baseline gap-2">
-              <p className="text-5xl font-black text-[#0057ff]">${amount}</p>
-              <p className="text-slate-600 font-bold text-lg">({biweeklyPayments} pagos)</p>
+              <p className="text-2xl font-black text-[#0057ff]">${amountPerPayment}</p>
+              <p className="text-slate-600 font-bold text-md">({biweeklyPayments} pagos)</p>
             </div>
             <div className="mt-3 flex items-center gap-1.5 text-blue-600 text-xs font-bold">
               <div className="w-4 h-4 rounded-full border-2 border-blue-600 flex items-center justify-center text-[10px]">✓</div>
@@ -100,19 +106,19 @@ function CheckoutPage({ onBack }) {
             </div>
           </div>
 
-          {/* Desglose de Costos */}
+          {/* Desglose de Costos DINÁMICO */}
           <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 mb-6">
             <div className="flex justify-between text-sm">
-              <p className="text-slate-500">Monto solicitado</p>
-              <p className="font-bold text-slate-900">$1299.99</p>
+              <p className="text-slate-500">Monto solicitado (Amazon)</p>
+              <p className="font-bold text-slate-900">${basePrice.toLocaleString()}</p>
             </div>
             <div className="flex justify-between text-sm">
               <p className="text-slate-500">Comisión (10.08%)</p>
-              <p className="font-bold text-slate-900">$131.08</p>
+              <p className="font-bold text-slate-900">${comisionMonto.toFixed(2)}</p>
             </div>
             <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
               <p className="text-lg font-bold text-slate-900">Costo total</p>
-              <p className="text-3xl font-black text-[#0057ff]">$1431.07</p>
+              <p className="text-3xl font-black text-[#0057ff]">${costoTotal.toFixed(2)}</p>
             </div>
           </div>
 
