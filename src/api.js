@@ -33,6 +33,17 @@ export function getDashboard(userId) {
   return request(`/api/users/${userId}/dashboard`);
 }
 
+export function getCreditOptions(userId) {
+  return request(`/api/users/${userId}/credit-options`);
+}
+
+export function requestCredit(userId, payload) {
+  return request(`/api/users/${userId}/credit-requests`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getPurchase(purchaseId) {
   return request(`/api/purchases/${purchaseId}`);
 }

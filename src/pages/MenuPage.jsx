@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import ProductPage from './ProductPage.jsx';
 import CheckoutPage from './CheckoutPage.jsx';
 import PriceTrackingPage from './PriceTrackingPage.jsx';
+import CreditPage from './CreditPage.jsx';
 import TopBar from '../components/TopBar.jsx';
 import { getDashboard } from '../api.js';
 
 function MenuPage({ user, onLogout }) {
   const [screen, setScreen] = useState('home');
+  const [currentUser, setCurrentUser] = useState(user);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState(null);
   const [selectedTrackingId, setSelectedTrackingId] = useState(null);
   const [dashboard, setDashboard] = useState(null);
@@ -21,6 +23,7 @@ function MenuPage({ user, onLogout }) {
       .then((data) => {
         if (!isMounted) return;
         setDashboard(data);
+        setCurrentUser(data.user);
         setError('');
       })
       .catch((apiError) => {
@@ -47,7 +50,19 @@ function MenuPage({ user, onLogout }) {
   }
 
   if (screen === 'checkout') {
-    return <CheckoutPage user={dashboard?.user || user} product={checkoutProduct} onBack={() => setScreen('home')} />;
+    return <CheckoutPage user={currentUser} product={checkoutProduct} onBack={() => setScreen('home')} />;
+  }
+  if (screen === 'credit') {
+    return (
+      <CreditPage
+        user={currentUser}
+        onBack={() => setScreen('home')}
+        onCreditApproved={(updatedUser) => {
+          setCurrentUser(updatedUser);
+          setDashboard((previous) => previous ? { ...previous, user: updatedUser } : previous);
+        }}
+      />
+    );
   }
   if (screen === 'tracking') {
     return (
@@ -69,7 +84,7 @@ function MenuPage({ user, onLogout }) {
           <div className="flex items-center justify-between w-full">
             <div>
               <h1 className="text-2xl font-bold leading-tight">Dashboard Menu</h1>
-              <p className="text-sm text-slate-500">{user.name} · nivel {user.creditRating}</p>
+              <p className="text-sm text-slate-500">{currentUser.name} · nivel {currentUser.creditRating}</p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -93,12 +108,18 @@ function MenuPage({ user, onLogout }) {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase text-slate-500">Oferta disponible</p>
-              <p className="mt-1 text-2xl font-black text-[#0057ff]">${Number(user.creditRemaining || 0).toLocaleString('en-US')}</p>
+              <p className="mt-1 text-2xl font-black text-[#0057ff]">${Number(currentUser.creditRemaining || 0).toLocaleString('en-US')}</p>
             </div>
             <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700">
-              Rating {user.creditRating}/5
+              Rating {currentUser.creditRating}/5
             </div>
           </div>
+          <button
+            onClick={() => setScreen('credit')}
+            className="mt-3 w-full rounded-lg bg-[#0057ff] py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700 active:scale-[0.99]"
+          >
+            Solicitar mas credito
+          </button>
         </section>
 
         {isLoading && (

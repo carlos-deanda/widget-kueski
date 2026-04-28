@@ -82,3 +82,17 @@ CREATE TABLE IF NOT EXISTS login_events (
   user_id INTEGER REFERENCES users(id),
   logged_in_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS credit_requests (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  amount NUMERIC(10, 2) NOT NULL CHECK (amount > 0),
+  payment_type TEXT NOT NULL CHECK (payment_type IN ('single', 'biweekly')),
+  single_term_days INTEGER,
+  biweekly_payments INTEGER,
+  interest_rate NUMERIC(5, 4) NOT NULL,
+  interest_amount NUMERIC(10, 2) NOT NULL,
+  total_amount NUMERIC(10, 2) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'approved',
+  created_at TIMESTAMP DEFAULT NOW()
+);

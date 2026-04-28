@@ -12,6 +12,14 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+const creditRequestLimitByRating = {
+  1: 500,
+  2: 1500,
+  3: 3000,
+  4: 6000,
+  5: 10000,
+};
+
 function mapUser(row) {
   return {
     id: row.id,
@@ -21,6 +29,7 @@ function mapUser(row) {
     phone: row.phone,
     creditRating: row.credit_rating,
     creditRemaining: money(row.credit_remaining),
+    creditRequestLimit: creditRequestLimitByRating[row.credit_rating] || creditRequestLimitByRating[1],
     lastLoginAt: row.last_login_at,
   };
 }
@@ -219,6 +228,167 @@ app.get('/api/users/:userId/dashboard', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/users/:userId/credit-options', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT id, name, username, email, phone, credit_rating, credit_remaining, last_login_at
+        FROM users
+        WHERE id = $1
+      `,
+      [userId]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const user = mapUser(result.rows[0]);
+
+    res.json({
+      user,
+      options: {
+        minAmount: 500,
+        maxAmount: user.creditRequestLimit,
+        step: 500,
+        singleInterestRate: 0.08,
+        biweeklyInterestRate: 0.12,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/users/:userId/credit-requests', async (req, res) => {
+  const { userId } = req.params;
+  const {
+    amount,
+    paymentType,
+    singleTerm,
+    biweeklyPayments,
+  } = req.body;
+
+  const requestedAmount = money(amount);
+
+  if (!requestedAmount || requestedAmount <= 0) {
+    res.status(400).json({ error: 'Monto invalido' });
+    return;
+  }
+
+  if (!['single', 'biweekly'].includes(paymentType)) {
+    res.status(400).json({ error: 'Metodo de pago invalido' });
+    return;
+  }
+
+  if (paymentType === 'single' && ![15, 30].includes(Number(singleTerm))) {
+    res.status(400).json({ error: 'Plazo de pago invalido' });
+    return;
+  }
+
+  if (paymentType === 'biweekly' && (Number(biweeklyPayments) < 2 || Number(biweeklyPayments) > 12)) {
+    res.status(400).json({ error: 'Numero de quincenas invalido' });
+    return;
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const userResult = await client.query(
+      `
+        SELECT id, name, username, email, phone, credit_rating, credit_remaining, last_login_at
+        FROM users
+        WHERE id = $1
+        FOR UPDATE
+      `,
+      [userId]
+    );
+
+    if (userResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const user = mapUser(userResult.rows[0]);
+
+    if (requestedAmount > user.creditRequestLimit) {
+      await client.query('ROLLBACK');
+      res.status(400).json({
+        error: `Tu limite para esta solicitud es $${user.creditRequestLimit.toFixed(2)}`,
+      });
+      return;
+    }
+
+    const interestRate = paymentType === 'single' ? 0.08 : 0.12;
+    const interestAmount = requestedAmount * interestRate;
+    const totalAmount = requestedAmount + interestAmount;
+
+    const requestResult = await client.query(
+      `
+        INSERT INTO credit_requests (
+          user_id,
+          amount,
+          payment_type,
+          single_term_days,
+          biweekly_payments,
+          interest_rate,
+          interest_amount,
+          total_amount,
+          status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'approved')
+        RETURNING *
+      `,
+      [
+        userId,
+        requestedAmount,
+        paymentType,
+        paymentType === 'single' ? Number(singleTerm) : null,
+        paymentType === 'biweekly' ? Number(biweeklyPayments) : null,
+        interestRate,
+        interestAmount,
+        totalAmount,
+      ]
+    );
+
+    const updatedUser = await client.query(
+      `
+        UPDATE users
+        SET credit_remaining = credit_remaining + $1
+        WHERE id = $2
+        RETURNING id, name, username, email, phone, credit_rating, credit_remaining, last_login_at
+      `,
+      [requestedAmount, userId]
+    );
+
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      creditRequest: {
+        id: requestResult.rows[0].id,
+        amount: money(requestResult.rows[0].amount),
+        paymentType: requestResult.rows[0].payment_type,
+        interestRate: money(requestResult.rows[0].interest_rate),
+        interestAmount: money(requestResult.rows[0].interest_amount),
+        totalAmount: money(requestResult.rows[0].total_amount),
+        status: requestResult.rows[0].status,
+      },
+      user: mapUser(updatedUser.rows[0]),
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 });
 
