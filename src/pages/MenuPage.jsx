@@ -1,74 +1,104 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ProductPage from './ProductPage.jsx';
 import CheckoutPage from './CheckoutPage.jsx';
 import PriceTrackingPage from './PriceTrackingPage.jsx';
+import CreditPage from './CreditPage.jsx';
 import TopBar from '../components/TopBar.jsx';
+import { getDashboard } from '../api.js';
 
-// --- DATOS ESTÁTICOS ---
-const activePurchases = [
-  { name: 'Premium Headphones', paymentsLeft: '3 payments left', amount: '$162.50 biweekly' },
-  { name: 'Smart Watch Pro', paymentsLeft: '5 payments left', amount: '$106.25 biweekly' },
-  { name: 'Ultra HD Monitor', paymentsLeft: '8 payments left', amount: '$260.42 biweekly' },
-];
-
-const trackedProducts = [
-  { name: 'Gaming Laptop RTX', price: '$1899.99', change: '5.2%', trend: 'down', badge: 'Good Deal' },
-  { name: 'Mechanical Keyboard', price: '$189.99', change: '2.1%', trend: 'up' },
-  { name: 'Office Chair Pro', price: '$449.99', change: '8.5%', trend: 'down', badge: 'Good Deal' },
-];
-
-function MenuPage() {
-  // --- ESTADOS ---
+function MenuPage({ user, onLogout }) {
   const [screen, setScreen] = useState('home');
-  const [productPrice, setProductPrice] = useState("$0.00");
+  const [currentUser, setCurrentUser] = useState(user);
+  const [selectedPurchaseId, setSelectedPurchaseId] = useState(null);
+  const [selectedTrackingId, setSelectedTrackingId] = useState(null);
+  const [capturedPrice, setCapturedPrice] = useState('');
+  const [dashboard, setDashboard] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // --- LÓGICA DE LA EXTENSIÓN (CONTENT SCRIPT) ---
+  useEffect(() => {
+    let isMounted = true;
+
+    setIsLoading(true);
+    getDashboard(user.id)
+      .then((data) => {
+        if (!isMounted) return;
+        setDashboard(data);
+        setCurrentUser(data.user);
+        setError('');
+      })
+      .catch((apiError) => {
+        if (!isMounted) return;
+        setError(apiError.message);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user.id]);
+
+  const activePurchases = dashboard?.activePurchases || [];
+  const trackedProducts = dashboard?.trackedProducts || [];
+  const checkoutProduct = trackedProducts.find((product) => product.id === selectedTrackingId) || trackedProducts[0];
+
   const handleGoToCheckout = () => {
-    // Verificamos si estamos en el entorno de la extensión
-    if (typeof chrome !== "undefined" && chrome.tabs) {
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        // Enviamos mensaje a content.js para leer el DOM de Amazon
-        chrome.tabs.sendMessage(tabs[0].id, { action: "GET_PRODUCT_PRICE" }, (response) => {
-          if (response && response.price) {
-            setProductPrice(response.price); 
-          } else {
-            setProductPrice("No detectado"); 
-          }
-          setScreen('checkout'); 
+        chrome.tabs.sendMessage(tabs[0].id, { action: 'GET_PRODUCT_PRICE' }, (response) => {
+          setCapturedPrice(response?.price || '');
+          setScreen('checkout');
         });
       });
-    } else {
-      // Fallback para desarrollo en navegador local (sin extensión)
-      console.warn("Chrome API no disponible, usando precio default.");
-      setProductPrice("$1,234.56");
-      setScreen('checkout');
+      return;
     }
+
+    setCapturedPrice(checkoutProduct?.price || '$1,234.56');
+    setScreen('checkout');
   };
 
-  // --- RENDERIZADO CONDICIONAL (NAVEGACIÓN) ---
   if (screen === 'product') {
-    return <ProductPage onBack={() => setScreen('home')} />;
+    return <ProductPage purchaseId={selectedPurchaseId} onBack={() => setScreen('home')} />;
   }
 
   if (screen === 'checkout') {
     return (
-      <CheckoutPage 
-        price={productPrice} // Pasamos el precio capturado
-        onBack={() => setScreen('home')} 
+      <CheckoutPage
+        user={currentUser}
+        product={checkoutProduct}
+        price={capturedPrice}
+        onBack={() => setScreen('home')}
+      />
+    );
+  }
+
+  if (screen === 'credit') {
+    return (
+      <CreditPage
+        user={currentUser}
+        onBack={() => setScreen('home')}
+        onCreditApproved={(updatedUser) => {
+          setCurrentUser(updatedUser);
+          setDashboard((previous) => previous ? { ...previous, user: updatedUser } : previous);
+        }}
       />
     );
   }
 
   if (screen === 'tracking') {
     return (
-      <PriceTrackingPage 
-        onBack={() => setScreen('home')} 
-        onCheckout={handleGoToCheckout} // Usamos la función que escanea el precio
+      <PriceTrackingPage
+        trackingId={selectedTrackingId}
+        onBack={() => setScreen('home')}
+        onCheckout={handleGoToCheckout}
       />
     );
   }
 
-  // --- PANTALLA PRINCIPAL (HOME) ---
   return (
     <div className="w-full h-full bg-white flex flex-col font-sans text-slate-900">
       <TopBar />
@@ -78,43 +108,84 @@ function MenuPage() {
           <div className="flex items-center justify-between w-full">
             <div>
               <h1 className="text-2xl font-bold leading-tight">Dashboard Menu</h1>
-              <p className="text-sm text-slate-500">Manage your products</p>
+              <p className="text-sm text-slate-500">{currentUser.name} · nivel {currentUser.creditRating}</p>
             </div>
-            {/* Botón rápido de testeo */}
-            <button 
-              onClick={handleGoToCheckout}
-              className="text-[10px] bg-slate-100 text-slate-400 px-2 py-1 rounded hover:bg-slate-200"
-            >
-              quick checkout
-            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleGoToCheckout}
+                className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200"
+              >
+                checkout
+              </button>
+              <button
+                onClick={onLogout}
+                className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200"
+              >
+                salir
+              </button>
+            </div>
           </div>
         </section>
 
-        {/* --- TARJETAS DE RESUMEN --- */}
+        <section className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-500">Credito disponible</p>
+              <p className="mt-1 text-2xl font-black text-[#0057ff]">
+                ${Number(currentUser.creditRemaining || 0).toLocaleString('en-US')}
+              </p>
+            </div>
+            <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700">
+              Rating {currentUser.creditRating}/5
+            </div>
+          </div>
+          <button
+            onClick={() => setScreen('credit')}
+            className="mt-3 w-full rounded-lg bg-[#0057ff] py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700 active:scale-[0.99]"
+          >
+            Solicitar mas credito
+          </button>
+        </section>
+
+        {isLoading && (
+          <p className="mt-6 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-700">
+            Cargando datos...
+          </p>
+        )}
+
+        {error && (
+          <p className="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+            {error}
+          </p>
+        )}
+
         <section className="mt-7 grid grid-cols-3 gap-3">
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-center">
             <p className="mt-2 text-sm font-bold leading-tight">Active</p>
-            <p className="text-sm text-slate-500">3 products</p>
+            <p className="text-sm text-slate-500">{activePurchases.length} products</p>
           </div>
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-center">
             <p className="mt-2 text-sm font-bold leading-tight">Tracking</p>
-            <p className="text-sm text-slate-500">3 products</p>
+            <p className="text-sm text-slate-500">{trackedProducts.length} products</p>
           </div>
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-center">
             <p className="mt-2 text-sm font-bold leading-tight">Total</p>
-            <p className="text-sm text-slate-500">6 items</p>
+            <p className="text-sm text-slate-500">{activePurchases.length + trackedProducts.length} items</p>
           </div>
         </section>
 
-        {/* --- LISTA DE COMPRAS ACTIVAS --- */}
         <section className="mt-7">
           <h2 className="mb-4 text-xl font-bold">Active Purchases</h2>
           <div className="space-y-3">
             {activePurchases.map((purchase) => (
               <button
-                key={purchase.name}
+                key={purchase.id}
                 type="button"
-                onClick={() => setScreen('product')}
+                onClick={() => {
+                  setSelectedPurchaseId(purchase.id);
+                  setScreen('product');
+                }}
                 className="w-full rounded-lg border border-blue-100 bg-blue-50 p-4 text-left transition-colors hover:bg-blue-100 active:scale-[0.99]"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -133,7 +204,6 @@ function MenuPage() {
           </div>
         </section>
 
-        {/* --- LISTA DE TRACKING --- */}
         <section className="mt-8 border-t border-slate-200 pt-7">
           <h2 className="mb-4 text-xl font-bold">Price Tracking</h2>
           <div className="space-y-3">
@@ -141,9 +211,12 @@ function MenuPage() {
               const isDeal = product.trend === 'down';
               return (
                 <button
-                  key={product.name}
+                  key={product.id}
                   type="button"
-                  onClick={() => setScreen('tracking')}
+                  onClick={() => {
+                    setSelectedTrackingId(product.id);
+                    setScreen('tracking');
+                  }}
                   className={`rounded-lg border p-4 ${
                     isDeal ? 'border-green-200 bg-green-50' : 'border-pink-100 bg-pink-50'
                   } w-full text-left transition-colors hover:brightness-95 active:scale-[0.99]`}
