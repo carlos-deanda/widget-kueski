@@ -70,6 +70,10 @@ function addDays(date, days) {
   return result;
 }
 
+function escapeGooglePrivatePropertyValue(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 function formatDashboardPurchase(row) {
   const remaining = row.total_installments - row.completed_installments;
 
@@ -588,6 +592,22 @@ app.get('/api/integrations/google/calendar/callback', async (req, res) => {
     for (const payment of pendingPayments) {
       const startDate = new Date(payment.dueDate);
       const endDate = addDays(startDate, 1);
+      const purchasePropertyValue = String(purchase.id);
+      const installmentPropertyValue = String(payment.installmentNumber);
+
+      const existingEvents = await calendar.events.list({
+        calendarId: 'primary',
+        privateExtendedProperty: [
+          `kueskiPurchaseId=${escapeGooglePrivatePropertyValue(purchasePropertyValue)}`,
+          `kueskiInstallment=${escapeGooglePrivatePropertyValue(installmentPropertyValue)}`,
+        ],
+        maxResults: 1,
+        singleEvents: true,
+      });
+
+      if ((existingEvents.data.items || []).length > 0) {
+        continue;
+      }
 
       await calendar.events.insert({
         calendarId: 'primary',
@@ -596,6 +616,12 @@ app.get('/api/integrations/google/calendar/callback', async (req, res) => {
           description: `Pago ${payment.installmentNumber} de ${purchase.total_installments} por $${payment.amount.toFixed(2)}.`,
           start: { date: formatDateOnly(startDate) },
           end: { date: formatDateOnly(endDate) },
+          extendedProperties: {
+            private: {
+              kueskiPurchaseId: purchasePropertyValue,
+              kueskiInstallment: installmentPropertyValue,
+            },
+          },
         },
       });
 
