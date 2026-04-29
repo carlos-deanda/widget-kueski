@@ -47,22 +47,48 @@ function MenuPage({ user, onLogout }) {
 
   const activePurchases = dashboard?.activePurchases || [];
   const trackedProducts = dashboard?.trackedProducts || [];
-  const checkoutProduct = trackedProducts.find((product) => product.id === selectedTrackingId) || trackedProducts[0];
+  const [checkoutProduct, setCheckoutProduct] = useState(null);
 
   const handleGoToCheckout = () => {
-    if (typeof chrome !== 'undefined' && chrome.tabs) {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        chrome.tabs.sendMessage(tabs[0].id, { action: 'GET_PRODUCT_PRICE' }, (response) => {
+  if (typeof chrome !== 'undefined' && chrome.tabs) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      chrome.tabs.sendMessage(
+        tabs[0].id,
+        { action: 'GET_PRODUCT_PRICE' },
+        (response) => {
+
+          const baseProduct =
+            trackedProducts.find((p) => p.id === selectedTrackingId) ||
+            trackedProducts[0] ||
+            {};
+
+          const productData = {
+            ...baseProduct,
+            name: response?.name || baseProduct.name || "Producto de Amazon",
+            currentPrice: response?.price || baseProduct.price || "0",
+          };
+
+          console.log("CHECKOUT DATA:", productData);
+
+          setCheckoutProduct(productData);
           setCapturedPrice(response?.price || '');
           setScreen('checkout');
-        });
-      });
-      return;
-    }
+        }
+      );
+    });
+    return;
+  }
 
-    setCapturedPrice(checkoutProduct?.price || '$1,234.56');
-    setScreen('checkout');
-  };
+  // fallback (sin chrome)
+  const fallbackProduct =
+    trackedProducts.find((p) => p.id === selectedTrackingId) ||
+    trackedProducts[0] ||
+    {};
+
+  setCheckoutProduct(fallbackProduct);
+  setCapturedPrice(fallbackProduct?.price || '$1,234.56');
+  setScreen('checkout');
+};
 
   if (screen === 'product') {
     return <ProductPage purchaseId={selectedPurchaseId} onBack={() => setScreen('home')} />;

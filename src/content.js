@@ -21,16 +21,38 @@ function extraerPrecio() {
   return null;
 }
 
+// --- NUEVA FUNCIÓN (Solo para el nombre) ---
+function extraerNombre() {
+  const selectoresNombre = [
+    '#productTitle',       // Amazon estándar
+    'h1',                  // Genérico
+    '.ui-pdp-title'        // Mercado Libre (por si acaso)
+  ];
+
+  for (let selector of selectoresNombre) {
+    const elemento = document.querySelector(selector);
+    if (elemento && elemento.innerText.trim() !== "") {
+      return elemento.innerText.trim();
+    }
+  }
+  return document.title; // Fallback: título de la pestaña
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log("📩 Mensaje recibido en Amazon:", request);
 
   if (request.action === "GET_PRODUCT_PRICE") {
     const foundPrice = extraerPrecio();
+    const foundName = extraerNombre(); // <--- Llamamos a la nueva función
     
-    console.log("🏷️ Enviando precio al widget:", foundPrice);
-    sendResponse({ price: foundPrice || "No encontrado" });
+    console.log("🏷️ Enviando datos al widget:", { foundPrice, foundName });
+    
+    // Devolvemos ambos datos sin romper tu estructura
+    sendResponse({ 
+      price: foundPrice || "No encontrado",
+      name: foundName 
+    });
   }
   
-  // Importante: mantiene el canal abierto para la respuesta asíncrona
   return true; 
 });
