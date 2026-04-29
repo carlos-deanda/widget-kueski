@@ -79,7 +79,6 @@ function ProductPage({ purchaseId, onBack }) {
 
     try {
       await openAppleCalendar(purchaseId);
-      setCalendarMessage('Se intento abrir Apple Calendar automaticamente.');
       return;
     } catch {
       setCalendarMessage('No se pudo abrir Apple Calendar automaticamente; se abrio el archivo de calendario.');
