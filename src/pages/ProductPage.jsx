@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import TopBar from '../components/TopBar.jsx';
 import { getAppleCalendarUrl, getGoogleCalendarStartUrl, getPurchase, openAppleCalendar } from '../api.js';
 
-function ProductPage({ purchaseId, onBack }) {
+// Se añade onClose a las props
+function ProductPage({ purchaseId, onBack, onClose }) {
   const [purchase, setPurchase] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,13 +35,14 @@ function ProductPage({ purchaseId, onBack }) {
   }, [purchaseId]);
 
   const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
+  
   const nextPayment = purchase?.nextPaymentDate
-    ? new Date(purchase.nextPaymentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    ? new Date(purchase.nextPaymentDate).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' })
     : 'Pendiente';
 
   const handleAddToCalendar = () => {
     if (!purchaseId) {
-      setCalendarMessage('No se encontro la compra para sincronizar el calendario.');
+      setCalendarMessage('No se encontró la compra para sincronizar el calendario.');
       return;
     }
 
@@ -50,11 +52,11 @@ function ProductPage({ purchaseId, onBack }) {
       chrome.tabs.create({ url }, () => {
         if (chrome.runtime?.lastError) {
           window.location.assign(url);
-          setCalendarMessage('No se pudo abrir pestaña nueva; se abrio el flujo en esta ventana.');
+          setCalendarMessage('No se pudo abrir pestaña nueva; se abrió el flujo en esta ventana.');
           return;
         }
 
-        setCalendarMessage('Se abrio una pestaña para autorizar Google Calendar.');
+        setCalendarMessage('Se abrió una pestaña para autorizar Google Calendar.');
       });
       return;
     }
@@ -62,16 +64,16 @@ function ProductPage({ purchaseId, onBack }) {
     const popup = window.open(url, '_blank', 'noopener,noreferrer');
     if (!popup) {
       window.location.assign(url);
-      setCalendarMessage('Tu navegador bloqueo la ventana emergente; se redirigio en la misma pestaña.');
+      setCalendarMessage('Tu navegador bloqueó la ventana emergente; se redirigió en la misma pestaña.');
       return;
     }
 
-    setCalendarMessage('Se abrio Google para autorizar y agregar los pagos pendientes al calendario.');
+    setCalendarMessage('Se abrió Google para autorizar y agregar los pagos pendientes al calendario.');
   };
 
   const handleAddToAppleCalendar = async () => {
     if (!purchaseId) {
-      setCalendarMessage('No se encontro la compra para sincronizar el calendario.');
+      setCalendarMessage('No se encontró la compra para sincronizar el calendario.');
       return;
     }
 
@@ -79,10 +81,10 @@ function ProductPage({ purchaseId, onBack }) {
 
     try {
       await openAppleCalendar(purchaseId);
-      setCalendarMessage('Se intento abrir Apple Calendar automaticamente.');
+      setCalendarMessage('Se intentó abrir Apple Calendar automáticamente.');
       return;
     } catch {
-      setCalendarMessage('No se pudo abrir Apple Calendar automaticamente; se abrio el archivo de calendario.');
+      setCalendarMessage('No se pudo abrir Apple Calendar automáticamente; se abrió el archivo de calendario.');
     }
 
     window.location.assign(url);
@@ -90,14 +92,15 @@ function ProductPage({ purchaseId, onBack }) {
 
   return (
     <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 flex flex-col">
-      <TopBar />
+      {/* Se pasa la prop onClose al TopBar */}
+      <TopBar onClose={onClose} />
 
       <div className="grow rounded-b-2xl border-x border-b border-slate-200 bg-[#f5f5f5] p-4 overflow-y-auto">
         <button
           onClick={onBack}
           className="w-full bg-slate-200 text-slate-800 font-bold py-3 rounded-xl hover:bg-slate-300 active:scale-95 transition-all"
         >
-          Volver al menu
+          Volver al menú
         </button>
 
         {isLoading && (
@@ -117,35 +120,35 @@ function ProductPage({ purchaseId, onBack }) {
             <div className="flex items-start justify-between">
               <div className="flex gap-3">
                 <div>
-                  <h2 className="text-[24px] font-semibold leading-none">Active Purchase</h2>
-                  <p className="text-xs text-slate-500 mt-1">Payment tracking</p>
+                  <h2 className="text-[24px] font-semibold leading-none">Compra Activa</h2>
+                  <p className="text-xs text-slate-500 mt-1">Seguimiento de pagos</p>
                 </div>
               </div>
             </div>
 
             <div className="mt-5">
-              <p className="text-sm text-slate-500">Product</p>
+              <p className="text-sm text-slate-500">Producto</p>
               <p className="text-2xl font-semibold text-slate-900 mt-1">{purchase.productName}</p>
             </div>
 
             <div className="mt-4 grid grid-cols-3 gap-2">
               <div className="rounded-xl border border-[#c8d6ff] bg-[#e8eefc] p-3 text-center">
-                <p className="text-sm font-medium mt-1">Next payment</p>
+                <p className="text-sm font-medium mt-1">Próximo pago</p>
                 <p className="text-sm text-slate-500 mt-1">{nextPayment}</p>
               </div>
               <div className="rounded-xl border border-[#c8d6ff] bg-[#e8eefc] p-3 text-center">
-                <p className="text-sm font-medium mt-1">Remaining</p>
+                <p className="text-sm font-medium mt-1">Restantes</p>
                 <p className="text-sm text-slate-500 mt-1">{purchase.remainingInstallments} pagos</p>
               </div>
               <div className="rounded-xl border border-[#c8d6ff] bg-[#e8eefc] p-3 text-center">
-                <p className="text-sm font-medium mt-1">Progress</p>
+                <p className="text-sm font-medium mt-1">Progreso</p>
                 <p className="text-sm text-slate-500 mt-1">{purchase.progressPercent}%</p>
               </div>
             </div>
 
             <div className="mt-5 flex items-center justify-between">
-              <p className="text-lg font-medium">Payment Progress</p>
-              <p className="text-slate-500">{purchase.completedInstallments} of {purchase.totalInstallments} completed</p>
+              <p className="text-lg font-medium">Progreso de Pago</p>
+              <p className="text-slate-500">{purchase.completedInstallments} de {purchase.totalInstallments} completados</p>
             </div>
 
             <div className="mt-2 h-3 rounded-full bg-slate-300 overflow-hidden">
@@ -158,24 +161,24 @@ function ProductPage({ purchaseId, onBack }) {
                 <p className="text-2xl font-bold text-[#0057ff]">{formatMoney(purchase.installmentAmount)}</p>
                 <p className="text-slate-500 mb-1">({purchase.totalInstallments} pagos)</p>
               </div>
-              <p className="mt-2 text-[#0057ff]">On track with payments</p>
+              <p className="mt-2 text-[#0057ff]">Pagos al corriente</p>
             </div>
 
             <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-slate-500">Original price</p>
+                <p className="text-slate-500">Precio original</p>
                 <p>{formatMoney(purchase.originalPrice)}</p>
               </div>
               <div className="flex items-center justify-between">
-                <p className="text-slate-500">Paid so far</p>
+                <p className="text-slate-500">Pagado hasta hoy</p>
                 <p className="text-[#16a34a]">{formatMoney(purchase.paidSoFar)}</p>
               </div>
               <div className="flex items-center justify-between">
-                <p className="text-slate-500">Remaining balance</p>
+                <p className="text-slate-500">Saldo restante</p>
                 <p>{formatMoney(purchase.remainingBalance)}</p>
               </div>
               <div className="pt-2 mt-2 border-t border-slate-200 flex items-center justify-between">
-                <p className="text-xl font-medium">Total cost</p>
+                <p className="text-xl font-medium">Costo total</p>
                 <p className="text-3xl font-bold text-[#0057ff]">{formatMoney(purchase.totalCost)}</p>
               </div>
             </div>

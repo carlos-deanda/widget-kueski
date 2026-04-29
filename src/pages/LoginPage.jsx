@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import TopBar from '../components/TopBar.jsx';
 import { getUsers, login } from '../api.js';
 
-function LoginPage({ onLogin }) {
+// Se añade onClose a las props
+function LoginPage({ onLogin, onClose }) {
   const [users, setUsers] = useState([]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -51,7 +52,8 @@ function LoginPage({ onLogin }) {
 
   return (
     <div className="w-full h-full bg-white flex flex-col font-sans text-slate-900">
-      <TopBar />
+      {/* Se pasa la prop onClose al TopBar */}
+      <TopBar onClose={onClose} />
 
       <main className="grow overflow-y-auto p-4">
         <section>

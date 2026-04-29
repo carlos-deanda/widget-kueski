@@ -1,4 +1,6 @@
-function TopBar() {
+import React from 'react';
+
+function TopBar({ onClose }) {
   return (
     <header className="bg-[#0057ff] text-white px-4 py-3 shadow-sm">
       <div className="flex items-center justify-between">
@@ -15,9 +17,11 @@ function TopBar() {
             <p className="text-[11px] text-white/90">Chrome Extension</p>
           </div>
         </div>
+        
         <button
+          onClick={onClose} // Ejecuta la función de cierre
           type="button"
-          className="text-white/90 hover:text-white transition-colors text-lg leading-none"
+          className="text-white/90 hover:text-white transition-colors text-2xl leading-none p-1 active:scale-90"
           aria-label="Close"
         >
           ×
