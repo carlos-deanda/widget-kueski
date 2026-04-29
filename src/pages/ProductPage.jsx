@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import TopBar from '../components/TopBar.jsx';
-import { getGoogleCalendarStartUrl, getPurchase } from '../api.js';
+import { getAppleCalendarUrl, getGoogleCalendarStartUrl, getPurchase, openAppleCalendar } from '../api.js';
 
 function ProductPage({ purchaseId, onBack }) {
   const [purchase, setPurchase] = useState(null);
@@ -67,6 +67,25 @@ function ProductPage({ purchaseId, onBack }) {
     }
 
     setCalendarMessage('Se abrio Google para autorizar y agregar los pagos pendientes al calendario.');
+  };
+
+  const handleAddToAppleCalendar = async () => {
+    if (!purchaseId) {
+      setCalendarMessage('No se encontro la compra para sincronizar el calendario.');
+      return;
+    }
+
+    const url = getAppleCalendarUrl(purchaseId);
+
+    try {
+      await openAppleCalendar(purchaseId);
+      setCalendarMessage('Se intento abrir Apple Calendar automaticamente.');
+      return;
+    } catch {
+      setCalendarMessage('No se pudo abrir Apple Calendar automaticamente; se abrio el archivo de calendario.');
+    }
+
+    window.location.assign(url);
   };
 
   return (
@@ -161,12 +180,21 @@ function ProductPage({ purchaseId, onBack }) {
               </div>
             </div>
 
-            <button
-              onClick={handleAddToCalendar}
-              className="mt-4 w-full rounded-xl border border-slate-300 bg-[#f5f5f5] py-3 text-slate-700 hover:bg-slate-100 transition-colors"
-            >
-              Add to calendar
-            </button>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                onClick={handleAddToCalendar}
+                className="w-full rounded-xl border border-slate-300 bg-[#f5f5f5] py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 active:scale-[0.98] transition-all"
+              >
+                Google Calendar
+              </button>
+
+              <button
+                onClick={handleAddToAppleCalendar}
+                className="w-full rounded-xl border border-slate-300 bg-[#f5f5f5] py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 active:scale-[0.98] transition-all"
+              >
+                Apple Calendar
+              </button>
+            </div>
             {calendarMessage && (
               <p className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-700">
                 {calendarMessage}

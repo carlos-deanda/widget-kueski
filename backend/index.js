@@ -1,5 +1,9 @@
 require('dotenv').config();
 
+const fs = require('fs/promises');
+const os = require('os');
+const path = require('path');
+const { execFile } = require('child_process');
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -20,6 +24,131 @@ const creditRequestLimitByRating = {
   4: 6000,
   5: 10000,
 };
+
+function formatIcsDate(date) {
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+function formatIcsDateOnly(date) {
+  return date.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+function escapeIcsText(value) {
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\n/g, '\\n');
+}
+
+async function getPurchaseCalendarData(purchaseId) {
+  const purchaseResult = await pool.query(
+    `
+      SELECT
+        p.id,
+        p.product_id,
+        p.installment_amount,
+        p.total_installments,
+        p.completed_installments,
+        p.next_payment_date,
+        pr.name AS product_name
+      FROM purchases p
+      JOIN products pr ON pr.id = p.product_id
+      WHERE p.id = $1
+    `,
+    [purchaseId]
+  );
+
+  if (purchaseResult.rowCount === 0) {
+    return null;
+  }
+
+  const purchase = purchaseResult.rows[0];
+
+  const pendingPaymentsResult = await pool.query(
+    `
+      SELECT installment_number, amount, due_date
+      FROM payments
+      WHERE purchase_id = $1 AND status = 'pending'
+      ORDER BY due_date ASC
+    `,
+    [purchaseId]
+  );
+
+  const remainingInstallments = purchase.total_installments - purchase.completed_installments;
+
+  const pendingPayments = pendingPaymentsResult.rows.length > 0
+    ? pendingPaymentsResult.rows.map((row) => ({
+        installmentNumber: row.installment_number,
+        amount: money(row.amount),
+        dueDate: row.due_date,
+      }))
+    : Array.from({ length: Math.max(remainingInstallments, 0) }, (_, index) => {
+        const sequence = purchase.completed_installments + index + 1;
+        const baseDate = purchase.next_payment_date
+          ? new Date(purchase.next_payment_date)
+          : addDays(new Date(), 14 * index);
+        const dueDate = purchase.next_payment_date ? addDays(baseDate, 14 * index) : baseDate;
+
+        return {
+          installmentNumber: sequence,
+          amount: money(purchase.installment_amount),
+          dueDate,
+        };
+      });
+
+  return { purchase, pendingPayments };
+}
+
+function buildIcsCalendar(purchase, pendingPayments) {
+  const now = formatIcsDate(new Date());
+
+  const events = pendingPayments.map((payment) => {
+    const startDate = new Date(payment.dueDate);
+    const endDate = addDays(startDate, 1);
+
+    return [
+      'BEGIN:VEVENT',
+      `UID:kueski-${purchase.id}-${payment.installmentNumber}@kueski.local`,
+      `DTSTAMP:${now}`,
+      `DTSTART;VALUE=DATE:${formatIcsDateOnly(startDate)}`,
+      `DTEND;VALUE=DATE:${formatIcsDateOnly(endDate)}`,
+      `SUMMARY:${escapeIcsText(`Pago Kueski: ${purchase.product_name}`)}`,
+      `DESCRIPTION:${escapeIcsText(`Pago ${payment.installmentNumber} de ${purchase.total_installments} por $${payment.amount.toFixed(2)}.`)}`,
+      'END:VEVENT',
+    ].join('\r\n');
+  });
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Kueski Widget//Payments//ES',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    ...events,
+    'END:VCALENDAR',
+  ].join('\r\n');
+}
+
+async function openIcsInAppleCalendar(ics, purchaseId) {
+  const directory = path.join(os.tmpdir(), 'kueski-calendar');
+  const filePath = path.join(directory, `kueski-pagos-${purchaseId}-${Date.now()}.ics`);
+
+  await fs.mkdir(directory, { recursive: true });
+  await fs.writeFile(filePath, ics, 'utf8');
+  await new Promise((resolve, reject) => {
+    execFile('open', ['-a', 'Calendar', filePath], (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+
+  return filePath;
+}
 
 function mapUser(row) {
   return {
@@ -625,6 +754,62 @@ app.get('/api/integrations/google/calendar/callback', async (req, res) => {
     res.redirect('https://calendar.google.com/calendar/u/0/r');
   } catch (error) {
     res.status(500).send(`No se pudieron crear los eventos: ${error.message}`);
+  }
+});
+
+app.get('/api/purchases/:purchaseId/calendar/ics', async (req, res) => {
+  const { purchaseId } = req.params;
+
+  try {
+    const calendarData = await getPurchaseCalendarData(purchaseId);
+
+    if (!calendarData) {
+      res.status(404).send('Purchase not found.');
+      return;
+    }
+
+    const { purchase, pendingPayments } = calendarData;
+    const ics = buildIcsCalendar(purchase, pendingPayments);
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `inline; filename="kueski-pagos-${purchase.id}.ics"`);
+    res.send(ics);
+  } catch (error) {
+    res.status(500).send(`No se pudo generar el calendario: ${error.message}`);
+  }
+});
+
+app.post('/api/purchases/:purchaseId/calendar/apple/open', async (req, res) => {
+  const { purchaseId } = req.params;
+
+  if (process.platform !== 'darwin') {
+    res.status(409).json({
+      opened: false,
+      error: 'Apple Calendar automatic open is only available on macOS.',
+      fallbackUrl: `/api/purchases/${purchaseId}/calendar/ics`,
+    });
+    return;
+  }
+
+  try {
+    const calendarData = await getPurchaseCalendarData(purchaseId);
+
+    if (!calendarData) {
+      res.status(404).json({ opened: false, error: 'Purchase not found.' });
+      return;
+    }
+
+    const { purchase, pendingPayments } = calendarData;
+    const ics = buildIcsCalendar(purchase, pendingPayments);
+    await openIcsInAppleCalendar(ics, purchase.id);
+
+    res.json({ opened: true });
+  } catch (error) {
+    res.status(500).json({
+      opened: false,
+      error: error.message,
+      fallbackUrl: `/api/purchases/${purchaseId}/calendar/ics`,
+    });
   }
 });
 

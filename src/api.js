@@ -55,3 +55,13 @@ export function getPriceTracking(trackingId) {
 export function getGoogleCalendarStartUrl(purchaseId) {
   return `${API_BASE_URL}/api/purchases/${purchaseId}/calendar/google/start`;
 }
+
+export function getAppleCalendarUrl(purchaseId) {
+  return `${API_BASE_URL}/api/purchases/${purchaseId}/calendar/ics`;
+}
+
+export function openAppleCalendar(purchaseId) {
+  return request(`/api/purchases/${purchaseId}/calendar/apple/open`, {
+    method: 'POST',
+  });
+}
