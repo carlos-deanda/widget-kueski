@@ -1,5 +1,13 @@
 import { useState } from 'react';
 import TopBar from '../components/TopBar.jsx';
+import {
+  getAppleCalendarUrl,
+  getCheckoutAppleCalendarUrl,
+  getCheckoutGoogleCalendarStartUrl,
+  getGoogleCalendarStartUrl,
+  openAppleCalendar,
+  openCheckoutAppleCalendar,
+} from '../api.js';
 
 function parsePrice(price) {
   if (!price) return null;
@@ -12,10 +20,8 @@ function truncateName(name, limit = 60) {
   return name.length > limit ? name.substring(0, limit) + "..." : name;
 }
 
-// Se añade onClose a las props
-function CheckoutPage({ user, product, price, onBack, onResult, onClose }) {
-  // Ahora manejamos directamente el número de quincenas (del 1 al 6)
-  const [installments, setInstallments] = useState(6);
+function CheckoutPage({ user, product, price, onBack, onResult }) {
+  const [weeks, setWeeks] = useState(12);
 
   const capturedAmount = parsePrice(price);
   const requestedAmount = capturedAmount ?? parsePrice(product?.currentPrice) ?? 0;
@@ -31,9 +37,8 @@ function CheckoutPage({ user, product, price, onBack, onResult, onClose }) {
 
   const fee = requestedAmount * 0.1008;
   const totalCost = requestedAmount + fee;
-  
-  // El monto por pago se divide entre el número de quincenas seleccionado
-  const amountPerPayment = (totalCost / installments).toFixed(2);
+  const biweeklyPayments = Math.ceil(weeks / 2);
+  const amountPerPayment = (totalCost / biweeklyPayments).toFixed(2);
 
   const handleConfirmPurchase = () => {
     if (!isOverLimit) {
@@ -41,6 +46,52 @@ function CheckoutPage({ user, product, price, onBack, onResult, onClose }) {
     } else {
       onResult(false);
     }
+  };
+
+  const handleAddToGoogleCalendar = () => {
+    const url = purchaseId
+      ? getGoogleCalendarStartUrl(purchaseId)
+      : getCheckoutGoogleCalendarStartUrl(getCheckoutCalendarPayload());
+
+    if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+      chrome.tabs.create({ url }, () => {
+        if (chrome.runtime?.lastError) {
+          window.location.assign(url);
+          setCalendarMessage('No se pudo abrir pestaña nueva; se abrio el flujo en esta ventana.');
+          return;
+        }
+
+        setCalendarMessage('Se abrio una pestaña para autorizar Google Calendar.');
+      });
+      return;
+    }
+
+    const popup = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!popup) {
+      window.location.assign(url);
+      setCalendarMessage('Tu navegador bloqueo la ventana emergente; se redirigio en la misma pestaña.');
+      return;
+    }
+
+    setCalendarMessage('Se abrio Google para autorizar y agregar los pagos pendientes al calendario.');
+  };
+
+  const handleAddToAppleCalendar = async () => {
+    const payload = getCheckoutCalendarPayload();
+    const url = purchaseId ? getAppleCalendarUrl(purchaseId) : getCheckoutAppleCalendarUrl(payload);
+
+    try {
+      if (purchaseId) {
+        await openAppleCalendar(purchaseId);
+      } else {
+        await openCheckoutAppleCalendar(payload);
+      }
+      return;
+    } catch {
+      setCalendarMessage('No se pudo abrir Apple Calendar automaticamente; se abrio el archivo de calendario.');
+    }
+
+    window.location.assign(url);
   };
 
   return (
@@ -195,6 +246,34 @@ function CheckoutPage({ user, product, price, onBack, onResult, onClose }) {
             </svg>
             {isOverLimit ? 'Monto no disponible' : 'Confirmar compra'}
           </button>
+
+          {!isOverLimit && (
+            <div className="mt-4">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={handleAddToGoogleCalendar}
+                  className="w-full rounded-xl border border-slate-300 bg-[#f5f5f5] py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 active:scale-[0.98] transition-all"
+                >
+                  Google Calendar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleAddToAppleCalendar}
+                  className="w-full rounded-xl border border-slate-300 bg-[#f5f5f5] py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100 active:scale-[0.98] transition-all"
+                >
+                  Apple Calendar
+                </button>
+              </div>
+
+              {calendarMessage && (
+                <p className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-700">
+                  {calendarMessage}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

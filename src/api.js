@@ -65,3 +65,29 @@ export function openAppleCalendar(purchaseId) {
     method: 'POST',
   });
 }
+
+function checkoutCalendarQuery(payload) {
+  const params = new URLSearchParams({
+    productName: payload.productName,
+    installmentAmount: String(payload.installmentAmount),
+    totalInstallments: String(payload.totalInstallments),
+    firstPaymentDate: payload.firstPaymentDate,
+  });
+
+  return params.toString();
+}
+
+export function getCheckoutGoogleCalendarStartUrl(payload) {
+  return `${API_BASE_URL}/api/calendar/checkout/google/start?${checkoutCalendarQuery(payload)}`;
+}
+
+export function getCheckoutAppleCalendarUrl(payload) {
+  return `${API_BASE_URL}/api/calendar/checkout/ics?${checkoutCalendarQuery(payload)}`;
+}
+
+export function openCheckoutAppleCalendar(payload) {
+  return request('/api/calendar/checkout/apple/open', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}

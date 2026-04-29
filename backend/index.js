@@ -130,6 +130,49 @@ function buildIcsCalendar(purchase, pendingPayments) {
   ].join('\r\n');
 }
 
+function normalizeCheckoutCalendarPayload(source) {
+  const productName = String(source.productName || 'Producto seleccionado').trim().slice(0, 120);
+  const installmentAmount = money(source.installmentAmount);
+  const totalInstallments = Number.parseInt(source.totalInstallments, 10);
+  const firstPaymentDate = new Date(source.firstPaymentDate);
+
+  if (!Number.isFinite(installmentAmount) || installmentAmount <= 0) {
+    throw new Error('Invalid installment amount.');
+  }
+
+  if (!Number.isInteger(totalInstallments) || totalInstallments <= 0 || totalInstallments > 52) {
+    throw new Error('Invalid total installments.');
+  }
+
+  if (Number.isNaN(firstPaymentDate.getTime())) {
+    throw new Error('Invalid first payment date.');
+  }
+
+  return {
+    productName: productName || 'Producto seleccionado',
+    installmentAmount,
+    totalInstallments,
+    firstPaymentDate: formatDateOnly(firstPaymentDate),
+  };
+}
+
+function buildCheckoutCalendarData(payload) {
+  const normalized = normalizeCheckoutCalendarPayload(payload);
+  const firstPaymentDate = new Date(normalized.firstPaymentDate);
+  const purchase = {
+    id: `checkout-${Buffer.from(JSON.stringify(normalized)).toString('base64url').slice(0, 24)}`,
+    product_name: normalized.productName,
+    total_installments: normalized.totalInstallments,
+  };
+  const pendingPayments = Array.from({ length: normalized.totalInstallments }, (_, index) => ({
+    installmentNumber: index + 1,
+    amount: normalized.installmentAmount,
+    dueDate: addDays(firstPaymentDate, 14 * index),
+  }));
+
+  return { purchase, pendingPayments, normalized };
+}
+
 async function openIcsInAppleCalendar(ics, purchaseId) {
   const directory = path.join(os.tmpdir(), 'kueski-calendar');
   const filePath = path.join(directory, `kueski-pagos-${purchaseId}-${Date.now()}.ics`);
@@ -200,6 +243,45 @@ function addDays(date, days) {
 
 function escapeGooglePrivatePropertyValue(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+async function insertGooglePaymentEvents(calendar, purchase, pendingPayments, sourceKey, sourceValue) {
+  for (const payment of pendingPayments) {
+    const startDate = new Date(payment.dueDate);
+    const endDate = addDays(startDate, 1);
+    const sourcePropertyValue = String(sourceValue);
+    const installmentPropertyValue = String(payment.installmentNumber);
+
+    const existingEvents = await calendar.events.list({
+      calendarId: 'primary',
+      privateExtendedProperty: [
+        `${sourceKey}=${escapeGooglePrivatePropertyValue(sourcePropertyValue)}`,
+        `kueskiInstallment=${escapeGooglePrivatePropertyValue(installmentPropertyValue)}`,
+      ],
+      maxResults: 1,
+      singleEvents: true,
+    });
+
+    if ((existingEvents.data.items || []).length > 0) {
+      continue;
+    }
+
+    await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: {
+        summary: `Pago Kueski: ${purchase.product_name}`,
+        description: `Pago ${payment.installmentNumber} de ${purchase.total_installments} por $${payment.amount.toFixed(2)}.`,
+        start: { date: formatDateOnly(startDate) },
+        end: { date: formatDateOnly(endDate) },
+        extendedProperties: {
+          private: {
+            [sourceKey]: sourcePropertyValue,
+            kueskiInstallment: installmentPropertyValue,
+          },
+        },
+      },
+    });
+  }
 }
 
 function formatDashboardPurchase(row) {
@@ -644,10 +726,15 @@ app.get('/api/integrations/google/calendar/callback', async (req, res) => {
   }
 
   let purchaseId;
+  let checkoutCalendarPayload;
 
   try {
     const parsedState = decodeOAuthState(String(state));
-    purchaseId = Number(parsedState.purchaseId);
+    if (parsedState.checkoutCalendar) {
+      checkoutCalendarPayload = parsedState.checkoutCalendar;
+    } else {
+      purchaseId = Number(parsedState.purchaseId);
+    }
   } catch {
     res.status(400).send('Invalid OAuth state.');
     return;
@@ -657,6 +744,14 @@ app.get('/api/integrations/google/calendar/callback', async (req, res) => {
     const oauth2Client = getGoogleOAuthClient();
     const { tokens } = await oauth2Client.getToken(String(code));
     oauth2Client.setCredentials(tokens);
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    if (checkoutCalendarPayload) {
+      const { purchase, pendingPayments } = buildCheckoutCalendarData(checkoutCalendarPayload);
+      await insertGooglePaymentEvents(calendar, purchase, pendingPayments, 'kueskiCheckoutId', purchase.id);
+      res.redirect('https://calendar.google.com/calendar/u/0/r');
+      return;
+    }
 
     const purchaseResult = await pool.query(
       `
@@ -711,45 +806,7 @@ app.get('/api/integrations/google/calendar/callback', async (req, res) => {
           };
         });
 
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-    for (const payment of pendingPayments) {
-      const startDate = new Date(payment.dueDate);
-      const endDate = addDays(startDate, 1);
-      const purchasePropertyValue = String(purchase.id);
-      const installmentPropertyValue = String(payment.installmentNumber);
-
-      const existingEvents = await calendar.events.list({
-        calendarId: 'primary',
-        privateExtendedProperty: [
-          `kueskiPurchaseId=${escapeGooglePrivatePropertyValue(purchasePropertyValue)}`,
-          `kueskiInstallment=${escapeGooglePrivatePropertyValue(installmentPropertyValue)}`,
-        ],
-        maxResults: 1,
-        singleEvents: true,
-      });
-
-      if ((existingEvents.data.items || []).length > 0) {
-        continue;
-      }
-
-      await calendar.events.insert({
-        calendarId: 'primary',
-        requestBody: {
-          summary: `Pago Kueski: ${purchase.product_name}`,
-          description: `Pago ${payment.installmentNumber} de ${purchase.total_installments} por $${payment.amount.toFixed(2)}.`,
-          start: { date: formatDateOnly(startDate) },
-          end: { date: formatDateOnly(endDate) },
-          extendedProperties: {
-            private: {
-              kueskiPurchaseId: purchasePropertyValue,
-              kueskiInstallment: installmentPropertyValue,
-            },
-          },
-        },
-      });
-
-    }
+    await insertGooglePaymentEvents(calendar, purchase, pendingPayments, 'kueskiPurchaseId', purchase.id);
 
     res.redirect('https://calendar.google.com/calendar/u/0/r');
   } catch (error) {
@@ -809,6 +866,62 @@ app.post('/api/purchases/:purchaseId/calendar/apple/open', async (req, res) => {
       opened: false,
       error: error.message,
       fallbackUrl: `/api/purchases/${purchaseId}/calendar/ics`,
+    });
+  }
+});
+
+app.get('/api/calendar/checkout/google/start', async (req, res) => {
+  try {
+    const checkoutCalendar = normalizeCheckoutCalendarPayload(req.query);
+    const oauth2Client = getGoogleOAuthClient();
+    const state = encodeOAuthState({ checkoutCalendar });
+    const authUrl = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/calendar.events'],
+      prompt: 'consent',
+      state,
+    });
+
+    res.redirect(authUrl);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/calendar/checkout/ics', async (req, res) => {
+  try {
+    const { purchase, pendingPayments } = buildCheckoutCalendarData(req.query);
+    const ics = buildIcsCalendar(purchase, pendingPayments);
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline; filename="kueski-pagos-checkout.ics"');
+    res.send(ics);
+  } catch (error) {
+    res.status(400).send(`No se pudo generar el calendario: ${error.message}`);
+  }
+});
+
+app.post('/api/calendar/checkout/apple/open', async (req, res) => {
+  if (process.platform !== 'darwin') {
+    res.status(409).json({
+      opened: false,
+      error: 'Apple Calendar automatic open is only available on macOS.',
+      fallbackUrl: '/api/calendar/checkout/ics',
+    });
+    return;
+  }
+
+  try {
+    const { purchase, pendingPayments } = buildCheckoutCalendarData(req.body);
+    const ics = buildIcsCalendar(purchase, pendingPayments);
+    await openIcsInAppleCalendar(ics, purchase.id);
+
+    res.json({ opened: true });
+  } catch (error) {
+    res.status(400).json({
+      opened: false,
+      error: error.message,
+      fallbackUrl: '/api/calendar/checkout/ics',
     });
   }
 });
