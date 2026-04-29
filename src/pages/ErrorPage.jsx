@@ -1,9 +1,10 @@
 import TopBar from '../components/TopBar.jsx';
 
-export default function ErrorPage({ onBack, limit, userLevel }) {
+export default function ErrorPage({ onBack, limit, userLevel, onClose }) { // Se añade onClose a las props
   return (
     <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 flex flex-col">
-      <TopBar />
+      {/* Se pasa la prop onClose al TopBar */}
+      <TopBar onClose={onClose} />
 
       <div className="grow overflow-y-auto flex flex-col items-center justify-center p-4 text-center">
         
@@ -26,7 +27,7 @@ export default function ErrorPage({ onBack, limit, userLevel }) {
               Límite de Nivel Excedido
             </p>
             <p className="text-red-600 text-sm mt-1 font-medium">
-              Tu nivel {userLevel} permite compras <br/> de hasta <b>${Number(limit).toLocaleString('en-US')}</b>
+              Tu nivel {userLevel} permite compras <br/> de hasta <b>${Number(limit).toLocaleString('es-MX')}</b>
             </p>
           </div>
 
@@ -34,12 +35,12 @@ export default function ErrorPage({ onBack, limit, userLevel }) {
             onClick={onBack}
             className="mt-8 w-full bg-[#1e293b] hover:bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 text-base"
           >
-            Volver al Dashboard
+            Volver al Menú Principal
           </button>
         </div>
         
         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-6 mb-4">
-          Secure Payment System
+          Sistema de Pago Seguro
         </p>
       </div>
     </div>

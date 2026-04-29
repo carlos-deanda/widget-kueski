@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import TopBar from '../components/TopBar.jsx';
 import { getCreditOptions, requestCredit } from '../api.js';
 
-function CreditPage({ user, onBack, onCreditApproved }) {
+function CreditPage({ user, onBack, onCreditApproved, onClose }) { // Se añade onClose a las props
   const [creditAmount, setCreditAmount] = useState(500);
   const [paymentType, setPaymentType] = useState('single');
   const [singleTerm, setSingleTerm] = useState(15);
@@ -67,7 +67,7 @@ function CreditPage({ user, onBack, onCreditApproved }) {
       });
       setCurrentUser(data.user);
       onCreditApproved(data.user);
-      setSuccess(`Solicitud aprobada. Tu credito disponible ahora es $${Number(data.user.creditRemaining).toLocaleString('en-US')}.`);
+      setSuccess(`Solicitud aprobada. Tu crédito disponible ahora es $${Number(data.user.creditRemaining).toLocaleString('es-MX')}.`);
     } catch (apiError) {
       setError(apiError.message);
     } finally {
@@ -77,14 +77,15 @@ function CreditPage({ user, onBack, onCreditApproved }) {
 
   return (
     <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 flex flex-col">
-      <TopBar />
+      {/* Se pasa la prop onClose al TopBar */}
+      <TopBar onClose={onClose} />
 
       <div className="grow rounded-b-2xl border-x border-b border-slate-200 bg-[#f5f5f5] p-4 overflow-y-auto">
         <button
           onClick={onBack}
           className="w-full bg-slate-200 text-slate-800 font-bold py-3 rounded-xl hover:bg-slate-300 active:scale-95 transition-all mb-4"
         >
-          Volver al menu
+          Volver al menú
         </button>
 
         <div className="rounded-2xl border border-slate-200 bg-[#f8f8f8] p-4 shadow-sm">
@@ -93,7 +94,7 @@ function CreditPage({ user, onBack, onCreditApproved }) {
               Solicita tu crédito
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Nivel {currentUser.creditRating}/5 · disponible actual ${Number(currentUser.creditRemaining || 0).toLocaleString('en-US')}
+              Nivel {currentUser.creditRating}/5 · disponible actual ${Number(currentUser.creditRemaining || 0).toLocaleString('es-MX')}
             </p>
           </div>
 
@@ -121,7 +122,7 @@ function CreditPage({ user, onBack, onCreditApproved }) {
                 Monto del crédito
               </p>
               <p className="text-[#0057ff] font-black text-2xl">
-                ${creditAmount.toLocaleString()}
+                ${creditAmount.toLocaleString('es-MX')}
               </p>
             </div>
 
@@ -137,11 +138,11 @@ function CreditPage({ user, onBack, onCreditApproved }) {
             />
 
             <div className="flex justify-between mt-1 text-[10px] text-slate-400 font-medium">
-              <span>${minAmount.toLocaleString()}</span>
-              <span>${maxAmount.toLocaleString()}</span>
+              <span>${minAmount.toLocaleString('es-MX')}</span>
+              <span>${maxAmount.toLocaleString('es-MX')}</span>
             </div>
             <p className="mt-2 text-xs font-medium text-slate-500">
-              Maximo permitido para tu nivel: ${maxAmount.toLocaleString()}
+              Máximo permitido para tu nivel: ${maxAmount.toLocaleString('es-MX')}
             </p>
           </div>
 
