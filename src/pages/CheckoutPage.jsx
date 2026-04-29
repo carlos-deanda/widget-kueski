@@ -20,8 +20,9 @@ function truncateName(name, limit = 60) {
   return name.length > limit ? name.substring(0, limit) + "..." : name;
 }
 
-function CheckoutPage({ user, product, price, onBack, onResult }) {
-  const [weeks, setWeeks] = useState(12);
+function CheckoutPage({ user, product, price, purchaseId, onBack, onResult, onClose }) {
+  const [installments, setInstallments] = useState(3);
+  const [calendarMessage, setCalendarMessage] = useState('');
 
   const capturedAmount = parsePrice(price);
   const requestedAmount = capturedAmount ?? parsePrice(product?.currentPrice) ?? 0;
@@ -37,8 +38,16 @@ function CheckoutPage({ user, product, price, onBack, onResult }) {
 
   const fee = requestedAmount * 0.1008;
   const totalCost = requestedAmount + fee;
-  const biweeklyPayments = Math.ceil(weeks / 2);
-  const amountPerPayment = (totalCost / biweeklyPayments).toFixed(2);
+  const amountPerPayment = (totalCost / installments).toFixed(2);
+  const firstPaymentDate = new Date();
+  firstPaymentDate.setDate(firstPaymentDate.getDate() + 14);
+
+  const getCheckoutCalendarPayload = () => ({
+    productName,
+    installmentAmount: amountPerPayment,
+    totalInstallments: installments,
+    firstPaymentDate: firstPaymentDate.toISOString().slice(0, 10),
+  });
 
   const handleConfirmPurchase = () => {
     if (!isOverLimit) {

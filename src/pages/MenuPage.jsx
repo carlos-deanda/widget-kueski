@@ -171,6 +171,7 @@ function MenuPage({ user, onLogout, onClose }) {
         </section>
 
         {isLoading && <p className="mt-6 p-3 text-sm text-blue-700 bg-blue-50">Cargando datos...</p>}
+        {error && <p className="mt-6 p-3 text-sm text-red-700 bg-red-50">{error}</p>}
 
         <section className="mt-7">
           <h2 className="mb-4 text-xl font-bold">Compras Activas</h2>
