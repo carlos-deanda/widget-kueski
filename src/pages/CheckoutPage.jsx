@@ -7,16 +7,38 @@ function parsePrice(price) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function CheckoutPage({ user, product, price, onBack }) {
+function truncateName(name, limit = 60) {
+  if (!name) return "";
+  return name.length > limit ? name.substring(0, limit) + "..." : name;
+}
+
+function CheckoutPage({ user, product, price, onBack, onResult }) {
   const [weeks, setWeeks] = useState(12);
+
   const capturedAmount = parsePrice(price);
-  const requestedAmount = capturedAmount || Number(product?.currentPrice || 0);
-  const productName = product?.name || (capturedAmount ? 'Producto de la pagina actual' : 'Producto seleccionado');
-  const approvedAmount = Math.min(requestedAmount, Number(user?.creditRemaining || 0));
-  const fee = approvedAmount * 0.1008;
-  const totalCost = approvedAmount + fee;
+  const requestedAmount = capturedAmount ?? parsePrice(product?.currentPrice) ?? 0;
+
+  const rawName = product?.name || (capturedAmount ? 'Producto de la página actual' : 'Producto seleccionado');
+  const productName = truncateName(rawName, 65); 
+
+  const limitsByLevel = { 5: 10000, 4: 8000, 3: 6000, 2: 4000, 1: 2000 };
+  const userLevel = user?.creditRating || 1;
+  const maxAllowed = limitsByLevel[userLevel];
+
+  const isOverLimit = requestedAmount > maxAllowed;
+
+  const fee = requestedAmount * 0.1008;
+  const totalCost = requestedAmount + fee;
   const biweeklyPayments = Math.ceil(weeks / 2);
   const amountPerPayment = (totalCost / biweeklyPayments).toFixed(2);
+
+  const handleConfirmPurchase = () => {
+    if (!isOverLimit) {
+      onResult(true);  
+    } else {
+      onResult(false);
+    }
+  };
 
   return (
     <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 flex flex-col">
@@ -33,18 +55,15 @@ function CheckoutPage({ user, product, price, onBack }) {
         <div className="rounded-2xl border border-slate-200 bg-[#f8f8f8] p-4 shadow-sm mb-6">
           <div className="mb-6">
             <h2 className="text-[24px] font-semibold leading-tight text-slate-900">Complete Your Purchase</h2>
-            <p className="text-xs text-slate-500 mt-1">{user?.name} · rating {user?.creditRating}/5</p>
+            <p className="text-xs text-slate-500 mt-1">{user?.name} · rating {userLevel}/5</p>
           </div>
 
           <div className="mt-5 mb-6">
             <p className="text-sm text-slate-500 font-medium">Product</p>
             <p className="text-2xl font-bold text-slate-900 mt-0.5">{productName}</p>
-            <p className="mt-1 text-xs font-medium text-slate-500">
-              Credito disponible: ${Number(user?.creditRemaining || 0).toLocaleString('en-US')}
-            </p>
             {capturedAmount && (
               <p className="mt-1 text-xs font-medium text-[#0057ff]">
-                Precio detectado en pagina: ${capturedAmount.toFixed(2)}
+                Precio detectado: ${capturedAmount.toFixed(2)}
               </p>
             )}
           </div>
@@ -72,10 +91,9 @@ function CheckoutPage({ user, product, price, onBack }) {
               <p className="text-sm font-bold text-slate-700">Plazo (semanas)</p>
               <div className="text-right">
                 <p className="text-[#0057ff] font-bold text-lg leading-none">{weeks} semanas</p>
-                <p className="text-[10px] text-slate-500 mt-1">({biweeklyPayments} pagos quincenales)</p>
+                <p className="text-[10px] text-slate-500 mt-1">({biweeklyPayments} pagos)</p>
               </div>
             </div>
-
             <div className="relative w-full h-6 flex items-center">
               <input
                 type="range"
@@ -87,27 +105,22 @@ function CheckoutPage({ user, product, price, onBack }) {
                 className="absolute w-full h-2 bg-transparent appearance-none cursor-pointer z-20 accent-slate-900"
               />
               <div className="absolute w-full h-2 bg-slate-200 rounded-full z-10">
-                <div
-                  className="h-full bg-slate-900 rounded-full"
-                  style={{ width: `${((weeks - 4) / 48) * 100}%` }}
-                />
+                <div className="h-full bg-slate-900 rounded-full" style={{ width: `${((weeks - 4) / 48) * 100}%` }} />
               </div>
-            </div>
-
-            <div className="flex justify-between mt-1 text-[10px] text-slate-400 font-medium">
-              <span>4 semanas</span>
-              <span>52 semanas</span>
             </div>
           </div>
 
-          <div className="rounded-2xl bg-[#e4e8f0] p-5 text-left mb-6 border border-slate-200 shadow-inner">
-            <p className="text-slate-500 text-sm font-medium">Pago quincenal</p>
-            <div className="mt-1 flex items-baseline gap-2">
+          {/* --- BLOQUE DE PAGO QUINCENAL ACTUALIZADO --- */}
+          <div className="rounded-2xl bg-[#e4e8f0] p-5 mb-6 border border-slate-200 shadow-inner">
+            <p className="text-slate-500 text-sm font-medium mb-1">Pago quincenal</p>
+            <div className="flex items-baseline gap-2">
               <p className="text-2xl font-black text-[#0057ff]">${amountPerPayment}</p>
-              <p className="text-slate-600 font-bold text-md">({biweeklyPayments} pagos)</p>
+              <p className="text-slate-600 font-bold text-sm">({biweeklyPayments} pagos)</p>
             </div>
-            <div className="mt-3 flex items-center gap-1.5 text-blue-600 text-xs font-bold">
-              <div className="w-4 h-4 rounded-full border-2 border-blue-600 flex items-center justify-center text-[10px]">✓</div>
+            <div className="mt-3 flex items-center gap-1.5 text-[#0057ff] text-xs font-bold">
+              <div className="w-4 h-4 rounded-full border-2 border-[#0057ff] flex items-center justify-center text-[10px]">
+                ✓
+              </div>
               <span>First payment in 14 days</span>
             </div>
           </div>
@@ -117,10 +130,18 @@ function CheckoutPage({ user, product, price, onBack }) {
               <p className="text-slate-500">Monto solicitado</p>
               <p className="font-bold text-slate-900">${requestedAmount.toFixed(2)}</p>
             </div>
-            <div className="flex justify-between text-sm">
-              <p className="text-slate-500">Monto aprobado</p>
-              <p className="font-bold text-slate-900">${approvedAmount.toFixed(2)}</p>
+            
+            <div className={`flex justify-between text-sm items-center p-2 rounded-lg border transition-colors ${
+              isOverLimit 
+              ? 'bg-red-50 border-red-200 text-red-700' 
+              : 'bg-green-50 border-green-200 text-green-700'
+            }`}>
+              <p className="font-medium">
+                {isOverLimit ? '⚠️ Excede límite nivel ' : '✅ Límite nivel '} {userLevel}
+              </p>
+              <p className="font-bold">${maxAllowed.toLocaleString()}</p>
             </div>
+
             <div className="flex justify-between text-sm">
               <p className="text-slate-500">Comisión (10.08%)</p>
               <p className="font-bold text-slate-900">${fee.toFixed(2)}</p>
@@ -131,8 +152,13 @@ function CheckoutPage({ user, product, price, onBack }) {
             </div>
           </div>
 
-          <button className="w-full bg-[#2563eb] text-white font-bold py-4 rounded-xl shadow-lg active:scale-[0.98] transition-transform flex items-center justify-center gap-2">
-            <span>💳</span> Confirmar compra
+          <button 
+            onClick={handleConfirmPurchase} 
+            className={`w-full text-white font-bold py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${
+              isOverLimit ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#2563eb]'
+            }`}
+          >
+            <span>💳</span> {isOverLimit ? 'Monto no disponible' : 'Confirmar compra'}
           </button>
         </div>
       </div>

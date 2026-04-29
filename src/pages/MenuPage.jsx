@@ -5,6 +5,9 @@ import PriceTrackingPage from './PriceTrackingPage.jsx';
 import CreditPage from './CreditPage.jsx';
 import TopBar from '../components/TopBar.jsx';
 import { getDashboard } from '../api.js';
+import SuccessPage from './SuccessPage.jsx'; 
+import ErrorPage from './ErrorPage.jsx'; 
+
 
 function MenuPage({ user, onLogout }) {
   const [screen, setScreen] = useState('home');
@@ -44,22 +47,48 @@ function MenuPage({ user, onLogout }) {
 
   const activePurchases = dashboard?.activePurchases || [];
   const trackedProducts = dashboard?.trackedProducts || [];
-  const checkoutProduct = trackedProducts.find((product) => product.id === selectedTrackingId) || trackedProducts[0];
+  const [checkoutProduct, setCheckoutProduct] = useState(null);
 
   const handleGoToCheckout = () => {
-    if (typeof chrome !== 'undefined' && chrome.tabs) {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        chrome.tabs.sendMessage(tabs[0].id, { action: 'GET_PRODUCT_PRICE' }, (response) => {
+  if (typeof chrome !== 'undefined' && chrome.tabs) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      chrome.tabs.sendMessage(
+        tabs[0].id,
+        { action: 'GET_PRODUCT_PRICE' },
+        (response) => {
+
+          const baseProduct =
+            trackedProducts.find((p) => p.id === selectedTrackingId) ||
+            trackedProducts[0] ||
+            {};
+
+          const productData = {
+            ...baseProduct,
+            name: response?.name || baseProduct.name || "Producto de Amazon",
+            currentPrice: response?.price || baseProduct.price || "0",
+          };
+
+          console.log("CHECKOUT DATA:", productData);
+
+          setCheckoutProduct(productData);
           setCapturedPrice(response?.price || '');
           setScreen('checkout');
-        });
-      });
-      return;
-    }
+        }
+      );
+    });
+    return;
+  }
 
-    setCapturedPrice(checkoutProduct?.price || '$1,234.56');
-    setScreen('checkout');
-  };
+  // fallback (sin chrome)
+  const fallbackProduct =
+    trackedProducts.find((p) => p.id === selectedTrackingId) ||
+    trackedProducts[0] ||
+    {};
+
+  setCheckoutProduct(fallbackProduct);
+  setCapturedPrice(fallbackProduct?.price || '$1,234.56');
+  setScreen('checkout');
+};
 
   if (screen === 'product') {
     return <ProductPage purchaseId={selectedPurchaseId} onBack={() => setScreen('home')} />;
@@ -72,7 +101,7 @@ function MenuPage({ user, onLogout }) {
         product={checkoutProduct}
         price={capturedPrice}
         onBack={() => setScreen('home')}
-      />
+        onResult={(isSuccess) => setScreen(isSuccess ? 'success' : 'error')}      />
     );
   }
 
@@ -97,6 +126,16 @@ function MenuPage({ user, onLogout }) {
         onCheckout={handleGoToCheckout}
       />
     );
+  }
+
+  if (screen === 'success') {
+    return <SuccessPage onBack={() => setScreen('home')} />;
+  }
+
+  if (screen === 'error') {
+    const limitsByLevel = { 5: 10000, 4: 8000, 3: 6000, 2: 4000, 1: 2000 };
+    const levelLimit = limitsByLevel[currentUser.creditRating] || 0;    
+    return <ErrorPage onBack={() => setScreen('home')} limit={levelLimit} userLevel={currentUser.creditRating} />;
   }
 
   return (
