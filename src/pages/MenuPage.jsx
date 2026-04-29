@@ -5,6 +5,9 @@ import PriceTrackingPage from './PriceTrackingPage.jsx';
 import CreditPage from './CreditPage.jsx';
 import TopBar from '../components/TopBar.jsx';
 import { getDashboard } from '../api.js';
+import SuccessPage from './SuccessPage.jsx'; 
+import ErrorPage from './ErrorPage.jsx'; 
+
 
 function MenuPage({ user, onLogout }) {
   const [screen, setScreen] = useState('home');
@@ -72,7 +75,7 @@ function MenuPage({ user, onLogout }) {
         product={checkoutProduct}
         price={capturedPrice}
         onBack={() => setScreen('home')}
-      />
+        onResult={(isSuccess) => setScreen(isSuccess ? 'success' : 'error')}      />
     );
   }
 
@@ -97,6 +100,16 @@ function MenuPage({ user, onLogout }) {
         onCheckout={handleGoToCheckout}
       />
     );
+  }
+
+  if (screen === 'success') {
+    return <SuccessPage onBack={() => setScreen('home')} />;
+  }
+
+  if (screen === 'error') {
+    const limitsByLevel = { 5: 10000, 4: 8000, 3: 6000, 2: 4000, 1: 2000 };
+    const levelLimit = limitsByLevel[currentUser.creditRating] || 0;    
+    return <ErrorPage onBack={() => setScreen('home')} limit={levelLimit} userLevel={currentUser.creditRating} />;
   }
 
   return (

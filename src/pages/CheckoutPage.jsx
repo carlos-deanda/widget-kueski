@@ -7,7 +7,7 @@ function parsePrice(price) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function CheckoutPage({ user, product, price, onBack }) {
+function CheckoutPage({ user, product, price, onBack, onResult }) {
   const [weeks, setWeeks] = useState(12);
   const capturedAmount = parsePrice(price);
   const requestedAmount = capturedAmount || Number(product?.currentPrice || 0);
@@ -17,6 +17,29 @@ function CheckoutPage({ user, product, price, onBack }) {
   const totalCost = approvedAmount + fee;
   const biweeklyPayments = Math.ceil(weeks / 2);
   const amountPerPayment = (totalCost / biweeklyPayments).toFixed(2);
+
+  const handleConfirmPurchase = () => {
+    const limitsByLevel = {
+      5: 10000,
+      4: 8000,
+      3: 6000,
+      2: 4000,
+      1: 2000
+    };
+
+    const userLevel = user?.creditRating || 1;
+    const maxAllowed = limitsByLevel[userLevel];
+    
+    const requestedAmount = parsePrice(price) || Number(product?.currentPrice || 0);
+
+    if (requestedAmount <= maxAllowed) {
+      onResult(true);  
+    } else {
+      onResult(false);
+    }
+  };
+
+
 
   return (
     <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 flex flex-col">
@@ -40,7 +63,7 @@ function CheckoutPage({ user, product, price, onBack }) {
             <p className="text-sm text-slate-500 font-medium">Product</p>
             <p className="text-2xl font-bold text-slate-900 mt-0.5">{productName}</p>
             <p className="mt-1 text-xs font-medium text-slate-500">
-              Credito disponible: ${Number(user?.creditRemaining || 0).toLocaleString('en-US')}
+             {/*  Credito disponible: ${Number(user?.creditRemaining || 0).toLocaleString('en-US')} */}
             </p>
             {capturedAmount && (
               <p className="mt-1 text-xs font-medium text-[#0057ff]">
@@ -131,7 +154,7 @@ function CheckoutPage({ user, product, price, onBack }) {
             </div>
           </div>
 
-          <button className="w-full bg-[#2563eb] text-white font-bold py-4 rounded-xl shadow-lg active:scale-[0.98] transition-transform flex items-center justify-center gap-2">
+          <button onClick={handleConfirmPurchase} className="w-full bg-[#2563eb] text-white font-bold py-4 rounded-xl shadow-lg active:scale-[0.98] transition-transform flex items-center justify-center gap-2">
             <span>💳</span> Confirmar compra
           </button>
         </div>
