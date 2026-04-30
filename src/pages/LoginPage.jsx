@@ -18,7 +18,7 @@ function LoginPage({ onLogin, onClose }) {
       .then((data) => {
         if (!isMounted) return;
         setUsers(data.users);
-        setUsername(data.users[0]?.username || '');
+        setUsername('');
       })
       .catch((apiError) => {
         if (!isMounted) return;
@@ -69,7 +69,7 @@ function LoginPage({ onLogin, onClose }) {
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               disabled={isLoading || isSubmitting}
-              placeholder="ana"
+              placeholder="Username"
               autoComplete="username"
               className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-medium text-slate-900 outline-none focus:border-[#0057ff]"
             />
@@ -82,12 +82,13 @@ function LoginPage({ onLogin, onClose }) {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               disabled={isLoading || isSubmitting}
-              placeholder="ana123"
+              placeholder="Password"
               autoComplete="current-password"
               className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-medium text-slate-900 outline-none focus:border-[#0057ff]"
             />
           </label>
 
+          { /*
           <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
             <p className="text-sm font-bold text-slate-900">Usuarios demo</p>
             <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600">
@@ -99,6 +100,7 @@ function LoginPage({ onLogin, onClose }) {
               ))}
             </div>
           </div>
+*/}
 
           {error && (
             <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
