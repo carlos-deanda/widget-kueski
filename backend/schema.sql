@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   phone TEXT,
   credit_rating INTEGER NOT NULL DEFAULT 3 CHECK (credit_rating BETWEEN 1 AND 5),
   credit_remaining NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  identidad_verificada BOOLEAN NOT NULL DEFAULT FALSE,
   last_login_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -22,6 +23,9 @@ ALTER TABLE users
 
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS credit_remaining NUMERIC(10, 2) NOT NULL DEFAULT 0;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS identidad_verificada BOOLEAN NOT NULL DEFAULT FALSE;
 
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;

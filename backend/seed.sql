@@ -1,10 +1,10 @@
-INSERT INTO users (id, name, username, password, email, phone, credit_rating, credit_remaining)
+INSERT INTO users (id, name, username, password, email, phone, credit_rating, credit_remaining, identidad_verificada)
 VALUES
-  (1, 'Ana Martinez', 'ana', 'ana123', 'ana@kueski.local', NULL, 5, 9800.00),
-  (2, 'Luis Gomez', 'luis', 'luis123', 'luis@kueski.local', NULL, 3, 2750.00),
-  (3, 'Marta Ruiz', 'marta', 'marta123', 'marta@kueski.local', NULL, 1, 350.00),
-  (4, 'Carlos Vega', 'carlos', 'carlos123', 'carlos@kueski.local', NULL, 4, 6200.00),
-  (5, 'Sofia Torres', 'sofia', 'sofia123', 'sofia@kueski.local', NULL, 2, 1100.00)
+  (1, 'Ana Martinez', 'ana', 'ana123', 'ana@kueski.local', NULL, 5, 9800.00, FALSE),
+  (2, 'Luis Gomez', 'luis', 'luis123', 'luis@kueski.local', NULL, 3, 2750.00, FALSE),
+  (3, 'Marta Ruiz', 'marta', 'marta123', 'marta@kueski.local', NULL, 1, 350.00, FALSE),
+  (4, 'Carlos Vega', 'carlos', 'carlos123', 'carlos@kueski.local', NULL, 4, 6200.00, FALSE),
+  (5, 'Sofia Torres', 'sofia', 'sofia123', 'sofia@kueski.local', NULL, 2, 1100.00, FALSE)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   username = EXCLUDED.username,

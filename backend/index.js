@@ -202,6 +202,7 @@ function mapUser(row) {
     phone: row.phone,
     creditRating: row.credit_rating,
     creditRemaining: money(row.credit_remaining),
+    identidadVerificada: row.identidad_verificada === true,
     creditRequestLimit: creditRequestLimitByRating[row.credit_rating] || creditRequestLimitByRating[1],
     lastLoginAt: row.last_login_at,
   };
@@ -349,7 +350,7 @@ app.get('/api/health', async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, name, username, email, phone, credit_rating, credit_remaining, last_login_at
+      SELECT id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
       FROM users
       ORDER BY credit_rating DESC, name ASC
     `);
@@ -378,7 +379,7 @@ app.post('/api/login', async (req, res) => {
         UPDATE users
         SET last_login_at = NOW()
         WHERE username = $1 AND password = $2
-        RETURNING id, name, username, email, phone, credit_rating, credit_remaining, last_login_at
+        RETURNING id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
       `,
       [username, password]
     );
@@ -408,7 +409,7 @@ app.get('/api/users/:userId/dashboard', async (req, res) => {
     const [user, purchases, trackedProducts] = await Promise.all([
       pool.query(
         `
-          SELECT id, name, username, email, phone, credit_rating, credit_remaining, last_login_at
+          SELECT id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
           FROM users
           WHERE id = $1
         `,
@@ -474,13 +475,38 @@ app.get('/api/users/:userId/dashboard', async (req, res) => {
   }
 });
 
+app.patch('/api/users/:userId/identity-verification', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+        UPDATE users
+        SET identidad_verificada = TRUE
+        WHERE id = $1
+        RETURNING id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
+      `,
+      [userId]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    res.json({ user: mapUser(result.rows[0]) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/users/:userId/credit-options', async (req, res) => {
   const { userId } = req.params;
 
   try {
     const result = await pool.query(
       `
-        SELECT id, name, username, email, phone, credit_rating, credit_remaining, last_login_at
+        SELECT id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
         FROM users
         WHERE id = $1
       `,
@@ -547,7 +573,7 @@ app.post('/api/users/:userId/credit-requests', async (req, res) => {
 
     const userResult = await client.query(
       `
-        SELECT id, name, username, email, phone, credit_rating, credit_remaining, last_login_at
+        SELECT id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
         FROM users
         WHERE id = $1
         FOR UPDATE
@@ -608,7 +634,7 @@ app.post('/api/users/:userId/credit-requests', async (req, res) => {
         UPDATE users
         SET credit_remaining = credit_remaining + $1
         WHERE id = $2
-        RETURNING id, name, username, email, phone, credit_rating, credit_remaining, last_login_at
+        RETURNING id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
       `,
       [requestedAmount, userId]
     );

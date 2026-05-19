@@ -20,7 +20,7 @@ function truncateName(name, limit = 60) {
   return name.length > limit ? name.substring(0, limit) + "..." : name;
 }
 
-function CheckoutPage({ user, product, price, purchaseId, onBack, onResult, onClose }) {
+function CheckoutPage({ user, product, price, purchaseId, onBack, onResult, onClose, onRequireIdentityVerification }) {
   const [installments, setInstallments] = useState(3);
   const [calendarMessage, setCalendarMessage] = useState('');
 
@@ -50,6 +50,11 @@ function CheckoutPage({ user, product, price, purchaseId, onBack, onResult, onCl
   });
 
   const handleConfirmPurchase = () => {
+    if (user?.identidadVerificada === false) {
+      onRequireIdentityVerification?.();
+      return;
+    }
+
     if (!isOverLimit) {
       onResult(true);  
     } else {

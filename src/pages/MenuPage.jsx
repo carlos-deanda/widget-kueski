@@ -3,6 +3,7 @@ import ProductPage from './ProductPage.jsx';
 import CheckoutPage from './CheckoutPage.jsx';
 import PriceTrackingPage from './PriceTrackingPage.jsx';
 import CreditPage from './CreditPage.jsx';
+import IdentityVerificationPage from './IdentityVerificationPage.jsx';
 import TopBar from '../components/TopBar.jsx';
 import { getDashboard } from '../api.js';
 import SuccessPage from './SuccessPage.jsx'; 
@@ -80,6 +81,20 @@ function MenuPage({ user, onLogout, onClose }) {
     return <ProductPage purchaseId={selectedPurchaseId} onBack={() => setScreen('home')} onClose={onClose} />;
   }
 
+  if (screen === 'identityVerification') {
+    return (
+      <IdentityVerificationPage
+        user={currentUser}
+        onClose={onClose}
+        onVerified={(updatedUser) => {
+          setCurrentUser(updatedUser);
+          setDashboard((previous) => previous ? { ...previous, user: updatedUser } : previous);
+          setScreen('checkout');
+        }}
+      />
+    );
+  }
+
   if (screen === 'checkout') {
     return (
       <CheckoutPage
@@ -88,6 +103,7 @@ function MenuPage({ user, onLogout, onClose }) {
         price={capturedPrice}
         onBack={() => setScreen('home')}
         onResult={(isSuccess) => setScreen(isSuccess ? 'success' : 'error')} 
+        onRequireIdentityVerification={() => setScreen('identityVerification')}
         onClose={onClose}
       />
     );

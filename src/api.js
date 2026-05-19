@@ -33,6 +33,12 @@ export function getDashboard(userId) {
   return request(`/api/users/${userId}/dashboard`);
 }
 
+export function verifyUserIdentity(userId) {
+  return request(`/api/users/${userId}/identity-verification`, {
+    method: 'PATCH',
+  });
+}
+
 export function getCreditOptions(userId) {
   return request(`/api/users/${userId}/credit-options`);
 }
