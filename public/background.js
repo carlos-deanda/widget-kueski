@@ -20,13 +20,22 @@ function notify(title, message, id = undefined) {
   }
 
   return new Promise((resolve) => {
-    chrome.notifications.create(id || `kueski-${Date.now()}-${Math.random()}`, {
+    const notifId = id || `kueski-${Date.now()}-${Math.random()}`;
+    const icon = chrome.runtime.getURL('images/kueski-logo.webp');
+    chrome.notifications.create(notifId, {
       type: 'basic',
-      iconUrl: chrome.runtime.getURL('images/kueski_logo.svg'),
+      iconUrl: icon,
       title,
       message,
       priority: 2,
-    }, () => resolve(true));
+    }, () => {
+      if (chrome.runtime?.lastError) {
+        console.warn('Notification create failed', chrome.runtime.lastError.message);
+        resolve(false);
+        return;
+      }
+      resolve(true);
+    });
   });
 }
 
@@ -163,11 +172,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'schedule_test') {
+    console.log('Received schedule_test message', message, 'from', sender);
     const delaySeconds = Number(message.delaySeconds) || 5;
     const when = Date.now() + delaySeconds * 1000;
     const name = `test-${Date.now()}`;
 
-    chrome.alarms.create(name, { when });
+    // Create alarm for delayed test notification
+    try {
+      chrome.alarms.create(name, { when });
+      console.log('Created test alarm', name, 'for', when);
+    } catch (err) {
+      console.warn('Failed to create test alarm', err);
+    }
+
+    // Send immediate confirmation notification so the user knows the
+    // background received the message (helps debugging when alarms don't fire).
+    try {
+      notify('Prueba programada', `Se programó notificación en ${delaySeconds}s.`, `scheduled-${Date.now()}`);
+    } catch (err) {
+      console.warn('Could not send scheduled confirmation notification', err);
+    }
 
     sendResponse({ ok: true, scheduledAt: when, name });
     return true;
