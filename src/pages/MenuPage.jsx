@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ProductPage from './ProductPage.jsx';
 import CheckoutPage from './CheckoutPage.jsx';
 import PriceTrackingPage from './PriceTrackingPage.jsx';
@@ -8,9 +8,17 @@ import TopBar from '../components/TopBar.jsx';
 import { getDashboard } from '../api.js';
 import SuccessPage from './SuccessPage.jsx'; 
 import ErrorPage from './ErrorPage.jsx'; 
+import { useNotifications } from '../components/useNotifications.js';
 
 // 1. Recibimos onClose desde las props
 function MenuPage({ user, onLogout, onClose }) {
+  const {
+    error: notifyError,
+    info: notifyInfo,
+    success: notifySuccess,
+    warning: notifyWarning,
+    requestNativePermission,
+  } = useNotifications();
   const [screen, setScreen] = useState('home');
   const [currentUser, setCurrentUser] = useState(user);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState(null);
@@ -19,6 +27,7 @@ function MenuPage({ user, onLogout, onClose }) {
   const [dashboard, setDashboard] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const hasShownDashboardToast = useRef(false);
 
   // Ya no necesitamos definir handleCloseWidget aquí adentro 
   // porque usaremos la prop 'onClose'
@@ -32,10 +41,24 @@ function MenuPage({ user, onLogout, onClose }) {
         setDashboard(data);
         setCurrentUser(data.user);
         setError('');
+
+        if (!hasShownDashboardToast.current) {
+          notifySuccess('Tus datos se actualizaron correctamente.', { title: 'Dashboard listo' });
+          hasShownDashboardToast.current = true;
+        }
+
+        const discountedProducts = (data.trackedProducts || []).filter((product) => product.trend === 'down');
+        if (discountedProducts.length > 0) {
+          notifyInfo(
+            `Hay ${discountedProducts.length} producto(s) con precio a la baja.`,
+            { title: 'Alerta de precios', native: true, duration: 5000 },
+          );
+        }
       })
       .catch((apiError) => {
         if (!isMounted) return;
         setError(apiError.message);
+        notifyError(apiError.message, { title: 'No se pudo cargar el dashboard' });
       })
       .finally(() => {
         if (isMounted) {
@@ -43,15 +66,25 @@ function MenuPage({ user, onLogout, onClose }) {
         }
       });
     return () => { isMounted = false; };
-  }, [user.id]);
+  }, [notifyError, notifyInfo, notifySuccess, user.id]);
 
   const activePurchases = dashboard?.activePurchases || [];
   const trackedProducts = dashboard?.trackedProducts || [];
   const [checkoutProduct, setCheckoutProduct] = useState(null);
 
   const handleGoToCheckout = () => {
+    if (!trackedProducts.length) {
+      notifyWarning('No tienes productos en seguimiento para continuar al checkout.', { title: 'Sin productos' });
+      return;
+    }
+
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (!tabs?.[0]?.id) {
+          notifyWarning('No encontramos una pestaña activa para leer el precio actual.', { title: 'Pestaña no disponible' });
+          return;
+        }
+
         chrome.tabs.sendMessage(
           tabs[0].id,
           { action: 'GET_PRODUCT_PRICE' },
@@ -74,6 +107,71 @@ function MenuPage({ user, onLogout, onClose }) {
     setCheckoutProduct(fallbackProduct);
     setCapturedPrice(fallbackProduct?.price || '$1,234.56');
     setScreen('checkout');
+  };
+
+  const handleLogout = () => {
+    notifyInfo('Sesión cerrada.', { title: 'Hasta pronto' });
+    onLogout();
+  };
+
+  const handleEnableNativeNotifications = async () => {
+    const permission = await requestNativePermission();
+
+    if (permission === 'granted') {
+      notifySuccess('Las notificaciones del navegador quedaron activadas.', {
+        title: 'Notificaciones activas',
+        native: true,
+      });
+      return;
+    }
+
+    if (permission === 'denied') {
+      notifyWarning('Tu navegador bloqueó las notificaciones. Puedes habilitarlas desde ajustes del sitio.', {
+        title: 'Permiso denegado',
+      });
+      return;
+    }
+
+    if (permission === 'default') {
+      notifyWarning('No confirmaste el permiso de notificaciones. Vuelve a intentarlo y acepta el permiso.', {
+        title: 'Permiso pendiente',
+      });
+      return;
+    }
+
+    notifyWarning('Este entorno no soporta notificaciones nativas. Si ya actualizaste el manifest, recarga la extensión en chrome://extensions.', {
+      title: 'No disponible',
+    });
+  };
+
+  const handleRunPriceCheckNow = async () => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
+      notifyWarning('No estás en contexto de extensión. Abre el widget como extensión y vuelve a intentarlo.', { title: 'No disponible' });
+      return;
+    }
+
+    chrome.runtime.sendMessage(
+      { type: 'check_prices_now', forceNotifyDown: true },
+      (response) => {
+        if (chrome.runtime?.lastError) {
+          notifyError(chrome.runtime.lastError.message || 'No se pudo ejecutar la revisión de precios.');
+          return;
+        }
+
+        if (!response?.ok) {
+          notifyError(response?.error || 'No se pudo ejecutar la revisión de precios.');
+          return;
+        }
+
+        const sent = response.result?.notificationsSent || 0;
+        notifySuccess(
+          sent > 0
+            ? `Revisión lista: se enviaron ${sent} notificación(es) de precio.`
+            : 'Revisión lista: no hubo bajadas para notificar.',
+          { title: 'Chequeo de precios' },
+        );
+      },
+    );
   };
 
   // 2. En todos los retornos, usamos 'onClose' en lugar de la función local
@@ -157,8 +255,31 @@ function MenuPage({ user, onLogout, onClose }) {
               <p className="text-sm text-slate-500">{currentUser.name} · nivel {currentUser.creditRating}</p>
             </div>
             <div className="flex items-center gap-2">
+              <button onClick={handleEnableNativeNotifications} className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200">activar alertas</button>
+              <button onClick={handleRunPriceCheckNow} className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200">revisar precios ahora</button>
+              <button
+                onClick={async () => {
+                  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                    try {
+                      await new Promise((resolve) => {
+                        chrome.runtime.sendMessage({ type: 'schedule_test', delaySeconds: 5 }, () => resolve());
+                      });
+                      notifyInfo('Notificación de prueba programada a 5s.', { title: 'Prueba programada' });
+                    } catch (err) {
+                      console.error(err);
+                      notifyError('No se pudo programar la notificación de prueba.');
+                    }
+                    return;
+                  }
+
+                  notifyWarning('No estás en contexto de extensión. Abre la extensión y vuelve a intentarlo.', { title: 'No disponible' });
+                }}
+                className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200"
+              >
+                probar notificación (5s)
+              </button>
               <button onClick={handleGoToCheckout} className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200">pagar</button>
-              <button onClick={onLogout} className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200">salir</button>
+              <button onClick={handleLogout} className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200">salir</button>
             </div>
           </div>
         </section>

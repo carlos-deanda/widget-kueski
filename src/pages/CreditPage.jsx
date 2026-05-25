@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import TopBar from '../components/TopBar.jsx';
 import { getCreditOptions, requestCredit } from '../api.js';
+import { useNotifications } from '../components/useNotifications.js';
 
 function CreditPage({ user, onBack, onCreditApproved, onClose }) { // Se añade onClose a las props
+  const { error: notifyError, success: notifySuccess } = useNotifications();
   const [creditAmount, setCreditAmount] = useState(500);
   const [paymentType, setPaymentType] = useState('single');
   const [singleTerm, setSingleTerm] = useState(15);
@@ -29,6 +31,7 @@ function CreditPage({ user, onBack, onCreditApproved, onClose }) { // Se añade 
       .catch((apiError) => {
         if (!isMounted) return;
         setError(apiError.message);
+        notifyError(apiError.message, { title: 'Error en opciones de crédito' });
       })
       .finally(() => {
         if (isMounted) {
@@ -39,7 +42,7 @@ function CreditPage({ user, onBack, onCreditApproved, onClose }) { // Se añade 
     return () => {
       isMounted = false;
     };
-  }, [user.id]);
+  }, [notifyError, user.id]);
 
   const minAmount = options?.minAmount || 500;
   const maxAmount = options?.maxAmount || 500;
@@ -68,8 +71,10 @@ function CreditPage({ user, onBack, onCreditApproved, onClose }) { // Se añade 
       setCurrentUser(data.user);
       onCreditApproved(data.user);
       setSuccess(`Solicitud aprobada. Tu crédito disponible ahora es $${Number(data.user.creditRemaining).toLocaleString('es-MX')}.`);
+      notifySuccess('Tu solicitud de crédito fue aprobada.', { title: 'Crédito aprobado' });
     } catch (apiError) {
       setError(apiError.message);
+      notifyError(apiError.message, { title: 'No se pudo aprobar el crédito' });
     } finally {
       setIsSubmitting(false);
     }
