@@ -2,47 +2,46 @@ import TopBar from '../components/TopBar.jsx';
 
 export default function ErrorPage({ onBack, limit, userLevel, onClose }) { // Se añade onClose a las props
   return (
-    <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 flex flex-col">
-      {/* Se pasa la prop onClose al TopBar */}
+    <div className="flex h-full w-full flex-col bg-white font-sans text-[#20212A]">
       <TopBar onClose={onClose} />
 
-      <div className="grow overflow-y-auto flex flex-col items-center justify-center p-4 text-center">
-        
-        <div className="bg-white p-8 rounded-3xl shadow-lg border border-slate-200 w-full max-w-sm">
-          
-          <div className="w-20 h-20 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-4xl mb-6 mx-auto shadow-sm">
-            ✕
+      <main className="flex grow flex-col items-center justify-center overflow-y-auto px-5 py-6 text-center">
+        <div className="w-full max-w-sm rounded-3xl border border-[#D1D5DB]/80 bg-white p-8 shadow-[0_12px_30px_rgba(32,33,42,0.08)]">
+          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-red-50 text-[#EF4444]">
+            <svg className="h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18 18 6M6 6l12 12" />
+            </svg>
           </div>
 
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+          <h1 className="mt-7 text-3xl font-bold leading-tight text-[#20212A]">
             Lo sentimos
           </h1>
-          
-          <p className="text-slate-500 mt-2 text-base font-medium leading-relaxed">
+
+          <p className="mt-3 text-lg font-medium leading-relaxed text-[#6B7280]">
             Tu compra no pudo ser <br /> procesada.
           </p>
 
-          <div className="mt-6 p-4 bg-red-50 rounded-2xl border border-red-100">
-            <p className="text-red-700 text-xs font-bold uppercase tracking-wider">
-              Límite de Nivel Excedido
+          <div className="mt-6 rounded-3xl border border-red-100 bg-red-50 p-5">
+            <p className="text-xs font-bold uppercase text-[#EF4444]">
+              Límite de nivel excedido
             </p>
-            <p className="text-red-600 text-sm mt-1 font-medium">
-              Tu nivel {userLevel} permite compras <br/> de hasta <b>${Number(limit).toLocaleString('es-MX')}</b>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-[#EF4444]">
+              Tu nivel {userLevel} permite compras <br /> de hasta <b>${Number(limit).toLocaleString('es-MX')}</b>
             </p>
           </div>
 
-          <button 
+          <button
             onClick={onBack}
-            className="mt-8 w-full bg-[#1e293b] hover:bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 text-base"
+            className="mt-8 w-full rounded-full bg-[#20212A] py-4 text-base font-bold text-white shadow-[0_10px_22px_rgba(32,33,42,0.16)] transition-all hover:bg-black active:scale-[0.98]"
           >
-            Volver al Menú Principal
+            Volver al menú principal
           </button>
         </div>
-        
-        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-6 mb-4">
-          Sistema de Pago Seguro
+
+        <p className="mt-6 mb-4 text-xs font-bold uppercase text-[#6B7280]">
+          Sistema de pago seguro
         </p>
-      </div>
+      </main>
     </div>
   );
 }

@@ -81,52 +81,58 @@ function CreditPage({ user, onBack, onCreditApproved, onClose }) { // Se añade 
   };
 
   return (
-    <div className="w-full h-full bg-[#f3f4f6] font-sans text-slate-800 flex flex-col">
-      {/* Se pasa la prop onClose al TopBar */}
+    <div className="flex h-full w-full flex-col bg-white font-sans text-[#20212A]">
       <TopBar onClose={onClose} />
 
-      <div className="grow rounded-b-2xl border-x border-b border-slate-200 bg-[#f5f5f5] p-4 overflow-y-auto">
+      <main className="grow overflow-y-auto px-5 pb-6 pt-2">
         <button
           onClick={onBack}
-          className="w-full bg-slate-200 text-slate-800 font-bold py-3 rounded-xl hover:bg-slate-300 active:scale-95 transition-all mb-4"
+          className="w-full rounded-full border border-[#D1D5DB] bg-gray-50 py-3 text-sm font-bold text-[#20212A] transition-all hover:bg-gray-100 active:scale-[0.98]"
         >
           Volver al menú
         </button>
 
-        <div className="rounded-2xl border border-slate-200 bg-[#f8f8f8] p-4 shadow-sm">
-          <div className="mb-6">
-            <h2 className="text-[24px] font-semibold leading-tight text-slate-900">
-              Solicita tu crédito
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Nivel {currentUser.creditRating}/5 · disponible actual ${Number(currentUser.creditRemaining || 0).toLocaleString('es-MX')}
-            </p>
+        <div className="mt-4 rounded-3xl border border-[#D1D5DB]/80 bg-white p-5 shadow-[0_12px_30px_rgba(32,33,42,0.08)]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-[#6B7280]">
+                Nivel {currentUser.creditRating}/5 · disponible ${Number(currentUser.creditRemaining || 0).toLocaleString('es-MX')}
+              </p>
+              <h2 className="mt-1 text-3xl font-bold leading-tight text-[#20212A]">
+                Solicita tu crédito
+              </h2>
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF2FF] text-[#4B73F8]">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+            </div>
           </div>
 
           {isLoading && (
-            <p className="mb-4 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm font-medium text-blue-700">
+            <p className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-medium text-[#4B73F8]">
               Cargando opciones...
             </p>
           )}
 
           {error && (
-            <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+            <p className="mt-5 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-medium text-[#EF4444]">
               {error}
             </p>
           )}
 
           {success && (
-            <p className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-700">
+            <p className="mt-5 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm font-medium text-[#16A34A]">
               {success}
             </p>
           )}
 
-          <div className="mb-7">
-            <div className="flex justify-between items-end mb-2">
-              <p className="text-sm font-bold text-slate-700">
+          <section className="mt-6 rounded-3xl border border-[#D1D5DB]/70 bg-white p-4 shadow-sm">
+            <div className="flex items-end justify-between gap-3">
+              <p className="text-sm font-bold text-[#20212A]">
                 Monto del crédito
               </p>
-              <p className="text-[#0057ff] font-black text-2xl">
+              <p className="text-3xl font-black text-[#4B73F8]">
                 ${creditAmount.toLocaleString('es-MX')}
               </p>
             </div>
@@ -139,53 +145,53 @@ function CreditPage({ user, onBack, onCreditApproved, onClose }) { // Se añade 
               value={creditAmount}
               onChange={(e) => setCreditAmount(Number(e.target.value))}
               disabled={isLoading || isSubmitting || !canRequestCredit}
-              className="w-full accent-[#0057ff] cursor-pointer"
+              className="mt-5 w-full cursor-pointer accent-[#4B73F8] disabled:cursor-not-allowed"
             />
 
-            <div className="flex justify-between mt-1 text-[10px] text-slate-400 font-medium">
+            <div className="mt-2 flex justify-between text-xs font-semibold text-[#6B7280]">
               <span>${minAmount.toLocaleString('es-MX')}</span>
               <span>${maxAmount.toLocaleString('es-MX')}</span>
             </div>
-            <p className="mt-2 text-xs font-medium text-slate-500">
+            <p className="mt-3 text-xs font-medium text-[#6B7280]">
               Máximo permitido para tu nivel: ${maxAmount.toLocaleString('es-MX')}
             </p>
-          </div>
+          </section>
 
-          <div className="mb-6">
-            <p className="text-sm font-bold text-slate-700 mb-3">
+          <section className="mt-5">
+            <p className="mb-3 text-sm font-bold text-[#20212A]">
               Método de pago
             </p>
 
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setPaymentType('single')}
-                className={`rounded-xl border p-3 text-left transition-all ${
+                className={`rounded-3xl border p-4 text-left transition-all active:scale-[0.98] ${
                   paymentType === 'single'
-                    ? 'border-[#0057ff] bg-[#e8eefc] text-[#0057ff]'
-                    : 'border-slate-200 bg-white text-slate-700'
+                    ? 'border-[#4B73F8] bg-[#EEF2FF] text-[#4B73F8]'
+                    : 'border-[#D1D5DB] bg-white text-[#20212A] hover:bg-gray-50'
                 }`}
               >
-                <p className="font-bold text-sm">Un solo pago</p>
-                <p className="text-xs mt-1">Paga en 15 o 30 días</p>
+                <p className="text-sm font-bold">Un solo pago</p>
+                <p className="mt-1 text-xs font-medium text-[#6B7280]">Paga en 15 o 30 días</p>
               </button>
 
               <button
                 onClick={() => setPaymentType('biweekly')}
-                className={`rounded-xl border p-3 text-left transition-all ${
+                className={`rounded-3xl border p-4 text-left transition-all active:scale-[0.98] ${
                   paymentType === 'biweekly'
-                    ? 'border-[#0057ff] bg-[#e8eefc] text-[#0057ff]'
-                    : 'border-slate-200 bg-white text-slate-700'
+                    ? 'border-[#4B73F8] bg-[#EEF2FF] text-[#4B73F8]'
+                    : 'border-[#D1D5DB] bg-white text-[#20212A] hover:bg-gray-50'
                 }`}
               >
-                <p className="font-bold text-sm">Quincenas</p>
-                <p className="text-xs mt-1">Divide tu pago</p>
+                <p className="text-sm font-bold">Quincenas</p>
+                <p className="mt-1 text-xs font-medium text-[#6B7280]">Divide tu pago</p>
               </button>
             </div>
-          </div>
+          </section>
 
           {paymentType === 'single' ? (
-            <div className="mb-6">
-              <p className="text-sm font-bold text-slate-700 mb-3">
+            <section className="mt-5">
+              <p className="mb-3 text-sm font-bold text-[#20212A]">
                 ¿Cuándo quieres pagar?
               </p>
 
@@ -194,24 +200,24 @@ function CreditPage({ user, onBack, onCreditApproved, onClose }) { // Se añade 
                   <button
                     key={days}
                     onClick={() => setSingleTerm(days)}
-                    className={`rounded-xl border py-3 font-bold transition-all ${
+                    className={`rounded-full border py-3 text-sm font-bold transition-all active:scale-[0.98] ${
                       singleTerm === days
-                        ? 'border-[#0057ff] bg-[#0057ff] text-white'
-                        : 'border-slate-200 bg-white text-slate-700'
+                        ? 'border-[#4B73F8] bg-[#4B73F8] text-white'
+                        : 'border-[#D1D5DB] bg-gray-50 text-[#20212A] hover:bg-gray-100'
                     }`}
                   >
                     {days} días
                   </button>
                 ))}
               </div>
-            </div>
+            </section>
           ) : (
-            <div className="mb-6">
-              <div className="flex justify-between items-end mb-2">
-                <p className="text-sm font-bold text-slate-700">
+            <section className="mt-5 rounded-3xl border border-[#D1D5DB]/70 bg-white p-4 shadow-sm">
+              <div className="flex items-end justify-between gap-3">
+                <p className="text-sm font-bold text-[#20212A]">
                   Número de quincenas
                 </p>
-                <p className="text-[#0057ff] font-bold text-lg">
+                <p className="text-lg font-bold text-[#4B73F8]">
                   {biweeklyPayments} quincenas
                 </p>
               </div>
@@ -223,69 +229,71 @@ function CreditPage({ user, onBack, onCreditApproved, onClose }) { // Se añade 
                 step="1"
                 value={biweeklyPayments}
                 onChange={(e) => setBiweeklyPayments(Number(e.target.value))}
-                className="w-full accent-[#0057ff] cursor-pointer"
+                className="mt-5 w-full cursor-pointer accent-[#4B73F8]"
               />
 
-              <div className="flex justify-between mt-1 text-[10px] text-slate-400 font-medium">
+              <div className="mt-2 flex justify-between text-xs font-semibold text-[#6B7280]">
                 <span>2</span>
                 <span>12</span>
               </div>
-            </div>
+            </section>
           )}
 
-          <div className="rounded-2xl bg-[#e4e8f0] p-5 mb-5 border border-slate-200">
-            <p className="text-slate-500 text-sm font-medium">
+          <section className="mt-5 rounded-3xl bg-[#EEF2FF] p-5">
+            <p className="text-sm font-semibold text-[#6B7280]">
               {paymentType === 'single' ? 'Pago total' : 'Pago por quincena'}
             </p>
 
             <div className="mt-1 flex items-baseline gap-2">
-              <p className="text-3xl font-black text-[#0057ff]">
+              <p className="text-3xl font-black text-[#4B73F8]">
                 ${paymentAmount.toFixed(2)}
               </p>
             </div>
 
-            <p className="mt-2 text-xs font-bold text-blue-600">
+            <p className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-bold text-[#4B73F8]">
               {paymentType === 'single'
                 ? `Pagar en ${singleTerm} días`
                 : `${biweeklyPayments} pagos quincenales`}
             </p>
-          </div>
+          </section>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 mb-6">
-            <div className="flex justify-between text-sm">
-              <p className="text-slate-500">Préstamo solicitado</p>
-              <p className="font-bold text-slate-900">
-                ${creditAmount.toFixed(2)}
-              </p>
+          <section className="mt-4 rounded-3xl border border-[#D1D5DB]/80 bg-white p-4 shadow-sm">
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <p className="font-medium text-[#6B7280]">Préstamo solicitado</p>
+                <p className="font-bold text-[#20212A]">
+                  ${creditAmount.toFixed(2)}
+                </p>
+              </div>
+
+              <div className="flex justify-between text-sm">
+                <p className="font-medium text-[#6B7280]">
+                  Interés ({(interestRate * 100).toFixed(0)}%)
+                </p>
+                <p className="font-bold text-[#20212A]">
+                  ${interest.toFixed(2)}
+                </p>
+              </div>
             </div>
 
-            <div className="flex justify-between text-sm">
-              <p className="text-slate-500">
-                Interés ({(interestRate * 100).toFixed(0)}%)
-              </p>
-              <p className="font-bold text-slate-900">
-                ${interest.toFixed(2)}
-              </p>
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
-              <p className="text-lg font-bold text-slate-900">Total a pagar</p>
-              <p className="text-2xl font-black text-[#0057ff]">
+            <div className="mt-4 flex items-center justify-between border-t border-[#D1D5DB]/70 pt-4">
+              <p className="text-lg font-bold text-[#20212A]">Total a pagar</p>
+              <p className="text-2xl font-black text-[#4B73F8]">
                 ${total.toFixed(2)}
               </p>
             </div>
-          </div>
+          </section>
 
           <button
             type="button"
             onClick={handleConfirm}
             disabled={isLoading || isSubmitting || !canRequestCredit}
-            className="w-full bg-[#2563eb] text-white font-bold py-4 rounded-xl shadow-lg active:scale-[0.98] transition-transform disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="mt-5 w-full rounded-full bg-[#4B73F8] py-4 text-base font-bold text-white shadow-[0_10px_22px_rgba(75,115,248,0.25)] transition-all hover:bg-[#345ee8] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
           >
             {isSubmitting ? 'Confirmando...' : 'Confirmar solicitud'}
           </button>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
