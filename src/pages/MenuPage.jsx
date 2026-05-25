@@ -6,8 +6,8 @@ import CreditPage from './CreditPage.jsx';
 import IdentityVerificationPage from './IdentityVerificationPage.jsx';
 import TopBar from '../components/TopBar.jsx';
 import { getDashboard } from '../api.js';
-import SuccessPage from './SuccessPage.jsx'; 
-import ErrorPage from './ErrorPage.jsx'; 
+import SuccessPage from './SuccessPage.jsx';
+import ErrorPage from './ErrorPage.jsx';
 import { useNotifications } from '../components/useNotifications.js';
 
 // 1. Recibimos onClose desde las props
@@ -29,7 +29,7 @@ function MenuPage({ user, onLogout, onClose }) {
   const [error, setError] = useState('');
   const hasShownDashboardToast = useRef(false);
 
-  // Ya no necesitamos definir handleCloseWidget aquí adentro 
+  // Ya no necesitamos definir handleCloseWidget aquí adentro
   // porque usaremos la prop 'onClose'
 
   useEffect(() => {
@@ -200,7 +200,7 @@ function MenuPage({ user, onLogout, onClose }) {
         product={checkoutProduct}
         price={capturedPrice}
         onBack={() => setScreen('home')}
-        onResult={(isSuccess) => setScreen(isSuccess ? 'success' : 'error')} 
+        onResult={(isSuccess) => setScreen(isSuccess ? 'success' : 'error')}
         onRequireIdentityVerification={() => setScreen('identityVerification')}
         onClose={onClose}
       />
@@ -238,115 +238,129 @@ function MenuPage({ user, onLogout, onClose }) {
 
   if (screen === 'error') {
     const limitsByLevel = { 5: 10000, 4: 8000, 3: 6000, 2: 4000, 1: 2000 };
-    const levelLimit = limitsByLevel[currentUser.creditRating] || 0;    
+    const levelLimit = limitsByLevel[currentUser.creditRating] || 0;
     return <ErrorPage onBack={() => setScreen('home')} limit={levelLimit} userLevel={currentUser.creditRating} onClose={onClose} />;
   }
 
   return (
-    <div className="w-full h-full bg-white flex flex-col font-sans text-slate-900">
-      {/* Usamos onClose aquí también */}
+    <div className="flex h-full w-full flex-col bg-white font-sans text-[#20212A]">
       <TopBar onClose={onClose} />
 
-      <main className="grow overflow-y-auto p-4 pb-20">
-        <section className="flex items-start justify-between">
-          <div className="flex items-center justify-between w-full">
+      <main className="grow overflow-y-auto px-5 pb-6 pt-2">
+        <section className="rounded-3xl border border-[#D1D5DB]/80 bg-white p-5 shadow-[0_12px_30px_rgba(32,33,42,0.08)]">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold leading-tight">Menú Principal</h1>
-              <p className="text-sm text-slate-500">{currentUser.name} · nivel {currentUser.creditRating}</p>
+              <p className="text-sm font-semibold text-[#6B7280]">Hola, {currentUser.name}</p>
+              <h1 className="mt-1 text-3xl font-bold leading-tight text-[#20212A]">Menú principal</h1>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={handleEnableNativeNotifications} className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200">activar alertas</button>
-              <button onClick={handleRunPriceCheckNow} className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200">revisar precios ahora</button>
-              <button
-                onClick={async () => {
-                  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-                    try {
-                      await new Promise((resolve) => {
-                        chrome.runtime.sendMessage({ type: 'schedule_test', delaySeconds: 5 }, () => resolve());
-                      });
-                      notifyInfo('Notificación de prueba programada a 5s.', { title: 'Prueba programada' });
-                    } catch (err) {
-                      console.error(err);
-                      notifyError('No se pudo programar la notificación de prueba.');
-                    }
-                    return;
-                  }
+            <div className="rounded-full bg-[#EEF2FF] px-3 py-1 text-xs font-bold text-[#4B73F8]">
+              Nivel {currentUser.creditRating}/5
+            </div>
+          </div>
 
-                  notifyWarning('No estás en contexto de extensión. Abre la extensión y vuelve a intentarlo.', { title: 'No disponible' });
-                }}
-                className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200"
-              >
-                probar notificación (5s)
-              </button>
-              <button onClick={handleGoToCheckout} className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200">pagar</button>
-              <button onClick={handleLogout} className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded hover:bg-slate-200">salir</button>
-            </div>
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <button onClick={handleEnableNativeNotifications} className="rounded-full border border-[#D1D5DB] bg-gray-50 px-3 py-2 text-xs font-bold text-[#20212A] transition-all hover:bg-gray-100 active:scale-[0.98]">Activar alertas</button>
+            <button onClick={handleRunPriceCheckNow} className="rounded-full border border-[#D1D5DB] bg-gray-50 px-3 py-2 text-xs font-bold text-[#20212A] transition-all hover:bg-gray-100 active:scale-[0.98]">Revisar precios</button>
+            <button
+              onClick={async () => {
+                if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                  try {
+                    await new Promise((resolve) => {
+                      chrome.runtime.sendMessage({ type: 'schedule_test', delaySeconds: 5 }, () => resolve());
+                    });
+                    notifyInfo('Notificación de prueba programada a 5s.', { title: 'Prueba programada' });
+                  } catch (err) {
+                    console.error(err);
+                    notifyError('No se pudo programar la notificación de prueba.');
+                  }
+                  return;
+                }
+
+                notifyWarning('No estás en contexto de extensión. Abre la extensión y vuelve a intentarlo.', { title: 'No disponible' });
+              }}
+              className="rounded-full border border-[#D1D5DB] bg-gray-50 px-3 py-2 text-xs font-bold text-[#20212A] transition-all hover:bg-gray-100 active:scale-[0.98]"
+            >
+              Probar notificación
+            </button>
+            <button onClick={handleLogout} className="rounded-full border border-[#D1D5DB] bg-gray-50 px-3 py-2 text-xs font-bold text-[#20212A] transition-all hover:bg-gray-100 active:scale-[0.98]">Salir</button>
           </div>
         </section>
 
-        {/* ... Resto del código de secciones (Crédito, Compras, etc.) se mantiene igual ... */}
-        {/* Solo asegúrate de que los botones que cambian la 'screen' sigan funcionando igual */}
-        
-        <section className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <section className="mt-4 rounded-3xl border border-[#D1D5DB]/80 bg-white p-5 shadow-[0_10px_26px_rgba(32,33,42,0.06)]">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-bold uppercase text-slate-500">Crédito disponible</p>
-              <p className="mt-1 text-2xl font-black text-[#0057ff]">
+              <p className="text-xs font-bold uppercase text-[#6B7280]">Crédito disponible</p>
+              <p className="mt-2 text-3xl font-black text-[#4B73F8]">
                 ${Number(currentUser.creditRemaining || 0).toLocaleString('es-MX')}
               </p>
             </div>
-            <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700">
-              Nivel {currentUser.creditRating}/5
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF2FF] text-[#4B73F8]">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 0 0 3-3V8a3 3 0 0 0-3-3H6a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3Z" />
+              </svg>
             </div>
           </div>
           <button
             onClick={() => setScreen('credit')}
-            className="mt-3 w-full rounded-lg bg-[#0057ff] py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700 active:scale-[0.99]"
+            className="mt-4 w-full rounded-full bg-[#4B73F8] py-4 text-base font-bold text-white transition-all hover:bg-[#345ee8] active:scale-[0.98]"
           >
             Solicitar más crédito
           </button>
+          <button
+            onClick={handleGoToCheckout}
+            className="mt-3 w-full rounded-full border border-[#D1D5DB] bg-gray-50 py-3 text-sm font-bold text-[#20212A] transition-all hover:bg-gray-100 active:scale-[0.98]"
+          >
+            Pagar con Kueski Pay
+          </button>
         </section>
 
-        {isLoading && <p className="mt-6 p-3 text-sm text-blue-700 bg-blue-50">Cargando datos...</p>}
-        {error && <p className="mt-6 p-3 text-sm text-red-700 bg-red-50">{error}</p>}
+        {isLoading && <p className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-medium text-[#4B73F8]">Cargando datos...</p>}
+        {error && <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-medium text-[#EF4444]">{error}</p>}
 
-        <section className="mt-7">
-          <h2 className="mb-4 text-xl font-bold">Compras Activas</h2>
+        <section className="mt-6">
+          <h2 className="mb-3 text-xl font-bold text-[#20212A]">Compras activas</h2>
           <div className="space-y-3">
             {activePurchases.map((purchase) => (
               <button
                 key={purchase.id}
                 onClick={() => { setSelectedPurchaseId(purchase.id); setScreen('product'); }}
-                className="w-full rounded-lg border border-blue-100 bg-blue-50 p-4 text-left transition-colors hover:bg-blue-100 active:scale-[0.99]"
+                className="w-full rounded-3xl border border-[#D1D5DB]/80 bg-white p-4 text-left shadow-[0_8px_22px_rgba(32,33,42,0.05)] transition-all hover:border-[#4B73F8]/60 hover:bg-[#F8FAFF] active:scale-[0.99]"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h3 className="font-bold">{purchase.name}</h3>
-                    <p className="text-sm text-slate-500">{purchase.paymentsLeft}</p>
-                    <p className="text-lg font-bold text-[#0057ff]">{purchase.amount}</p>
+                    <h3 className="font-bold text-[#20212A]">{purchase.name}</h3>
+                    <p className="mt-1 text-sm font-medium text-[#6B7280]">{purchase.paymentsLeft}</p>
+                    <p className="mt-2 text-lg font-bold text-[#4B73F8]">{purchase.amount}</p>
                   </div>
-                  <span className="text-3xl text-slate-400">›</span>
+                  <svg className="h-5 w-5 shrink-0 text-[#6B7280]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="m9 5 7 7-7 7" />
+                  </svg>
                 </div>
               </button>
             ))}
           </div>
         </section>
 
-        <section className="mt-8 border-t border-slate-200 pt-7">
-          <h2 className="mb-4 text-xl font-bold">Seguimiento de Precios</h2>
+        <section className="mt-7 border-t border-[#D1D5DB]/70 pt-6">
+          <h2 className="mb-3 text-xl font-bold text-[#20212A]">Seguimiento de precios</h2>
           <div className="space-y-3">
             {trackedProducts.map((product) => (
               <button
                 key={product.id}
                 onClick={() => { setSelectedTrackingId(product.id); setScreen('tracking'); }}
-                className={`rounded-lg border p-4 ${product.trend === 'down' ? 'border-green-200 bg-green-50' : 'border-pink-100 bg-pink-50'} w-full text-left`}
+                className={`w-full rounded-3xl border bg-white p-4 text-left shadow-[0_8px_22px_rgba(32,33,42,0.05)] transition-all hover:bg-[#F8FAFF] active:scale-[0.99] ${product.trend === 'down' ? 'border-[#5FCB71]/70' : 'border-[#EF4444]/40'}`}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h3 className="font-bold">{product.name}</h3>
-                    <p className="text-lg font-bold">{product.price}</p>
+                    <div className={`mb-2 inline-flex rounded-full px-3 py-1 text-xs font-bold ${product.trend === 'down' ? 'bg-green-50 text-[#16A34A]' : 'bg-red-50 text-[#EF4444]'}`}>
+                      {product.trend === 'down' ? 'Precio a la baja' : 'Precio al alza'}
+                    </div>
+                    <h3 className="font-bold text-[#20212A]">{product.name}</h3>
+                    <p className="mt-2 text-lg font-bold text-[#20212A]">{product.price}</p>
                   </div>
-                  <span className="text-3xl text-slate-400">›</span>
+                  <svg className="h-5 w-5 shrink-0 text-[#6B7280]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="m9 5 7 7-7 7" />
+                  </svg>
                 </div>
               </button>
             ))}
