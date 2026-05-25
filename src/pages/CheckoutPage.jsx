@@ -8,6 +8,7 @@ import {
   openAppleCalendar,
   openCheckoutAppleCalendar,
 } from '../api.js';
+import { useNotifications } from '../components/useNotifications.js';
 
 function parsePrice(price) {
   if (!price) return null;
@@ -21,6 +22,7 @@ function truncateName(name, limit = 60) {
 }
 
 function CheckoutPage({ user, product, price, purchaseId, onBack, onResult, onClose, onRequireIdentityVerification }) {
+  const { info: notifyInfo, warning: notifyWarning, error: notifyError } = useNotifications();
   const [installments, setInstallments] = useState(3);
   const [calendarMessage, setCalendarMessage] = useState('');
 
@@ -51,13 +53,18 @@ function CheckoutPage({ user, product, price, purchaseId, onBack, onResult, onCl
 
   const handleConfirmPurchase = () => {
     if (user?.identidadVerificada === false) {
+      notifyWarning('Debes verificar tu identidad antes de confirmar la compra.', {
+        title: 'Verificación requerida',
+      });
       onRequireIdentityVerification?.();
       return;
     }
 
     if (!isOverLimit) {
+      notifyInfo('Compra validada correctamente.', { title: 'Listo' });
       onResult(true);  
     } else {
+      notifyError('El monto solicitado excede tu límite disponible.', { title: 'Compra rechazada' });
       onResult(false);
     }
   };
@@ -72,10 +79,12 @@ function CheckoutPage({ user, product, price, purchaseId, onBack, onResult, onCl
         if (chrome.runtime?.lastError) {
           window.location.assign(url);
           setCalendarMessage('No se pudo abrir pestaña nueva; se abrio el flujo en esta ventana.');
+          notifyWarning('No se pudo abrir una pestaña nueva para Google Calendar.', { title: 'Aviso de calendario' });
           return;
         }
 
         setCalendarMessage('Se abrio una pestaña para autorizar Google Calendar.');
+        notifyInfo('Se abrió el flujo de Google Calendar en una nueva pestaña.', { title: 'Calendario' });
       });
       return;
     }
@@ -84,10 +93,12 @@ function CheckoutPage({ user, product, price, purchaseId, onBack, onResult, onCl
     if (!popup) {
       window.location.assign(url);
       setCalendarMessage('Tu navegador bloqueo la ventana emergente; se redirigio en la misma pestaña.');
+      notifyWarning('El navegador bloqueó la ventana emergente de Google Calendar.', { title: 'Ventana bloqueada' });
       return;
     }
 
     setCalendarMessage('Se abrio Google para autorizar y agregar los pagos pendientes al calendario.');
+    notifyInfo('Google Calendar se abrió para registrar tus pagos.', { title: 'Calendario' });
   };
 
   const handleAddToAppleCalendar = async () => {
@@ -103,6 +114,7 @@ function CheckoutPage({ user, product, price, purchaseId, onBack, onResult, onCl
       return;
     } catch {
       setCalendarMessage('No se pudo abrir Apple Calendar automaticamente; se abrio el archivo de calendario.');
+      notifyWarning('No se pudo abrir Apple Calendar automáticamente.', { title: 'Aviso de calendario' });
     }
 
     window.location.assign(url);

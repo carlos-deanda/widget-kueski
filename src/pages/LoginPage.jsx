@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import TopBar from '../components/TopBar.jsx';
 import { getUsers, login } from '../api.js';
+import { useNotifications } from '../components/useNotifications.js';
 
 // Se añade onClose a las props
 function LoginPage({ onLogin, onClose }) {
-  const [users, setUsers] = useState([]);
+  const { error: notifyError, success: notifySuccess } = useNotifications();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -15,14 +16,14 @@ function LoginPage({ onLogin, onClose }) {
     let isMounted = true;
 
     getUsers()
-      .then((data) => {
+      .then(() => {
         if (!isMounted) return;
-        setUsers(data.users);
         setUsername('');
       })
       .catch((apiError) => {
         if (!isMounted) return;
         setError(apiError.message);
+        notifyError(apiError.message, { title: 'Error de conexión' });
       })
       .finally(() => {
         if (isMounted) {
@@ -33,7 +34,7 @@ function LoginPage({ onLogin, onClose }) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [notifyError]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -42,9 +43,11 @@ function LoginPage({ onLogin, onClose }) {
 
     try {
       const data = await login(username.trim(), password);
+      notifySuccess(`Bienvenido ${data.user.name}.`, { title: 'Inicio de sesión exitoso' });
       onLogin(data.user);
     } catch (apiError) {
       setError(apiError.message);
+      notifyError(apiError.message, { title: 'No fue posible entrar' });
     } finally {
       setIsSubmitting(false);
     }

@@ -5,8 +5,16 @@
   "action": {
     "default_popup": "index.html"
   },
-  "permissions": ["activeTab", "scripting", "tabs"],
-  "host_permissions": ["*://*.amazon.com.mx/*", "*://*.amazon.com/*"],
+  "permissions": ["activeTab", "scripting", "tabs", "notifications", "alarms", "storage"],
+  "host_permissions": [
+    "*://*.amazon.com.mx/*",
+    "*://*.amazon.com/*",
+    "http://127.0.0.1:3001/*",
+    "http://localhost:3001/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["*://*.amazon.com.mx/*", "*://*.amazon.com/*"],
