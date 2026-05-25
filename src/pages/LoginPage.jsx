@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import TopBar from '../components/TopBar.jsx';
+import { useEffect, useState } from 'react';
 import { getUsers, login } from '../api.js';
 
 // Se añade onClose a las props
@@ -51,40 +50,54 @@ function LoginPage({ onLogin, onClose }) {
   };
 
   return (
-    <div className="w-full h-full bg-white flex flex-col font-sans text-slate-900">
-      {/* Se pasa la prop onClose al TopBar */}
-      <TopBar onClose={onClose} />
+    <div className="relative flex h-full w-full flex-col bg-white font-sans text-[#20212A]">
+      <button
+        onClick={onClose}
+        type="button"
+        className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-2xl leading-none text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 active:scale-95"
+        aria-label="Close"
+      >
+        ×
+      </button>
 
-      <main className="grow overflow-y-auto p-4">
-        <section>
-          <h1 className="text-2xl font-bold leading-tight">Iniciar sesion</h1>
-          <p className="mt-1 text-sm text-slate-500">Entra con un usuario local para cargar su widget.</p>
+      <main className="flex grow flex-col overflow-y-auto px-7 pb-6 pt-12">
+        <section className="flex flex-col items-center text-center">
+          <img
+            src="/images/kueski-logo.webp"
+            alt="Kueski"
+            className="h-10 w-auto object-contain"
+          />
+          <h1 className="mt-11 text-4xl font-bold leading-none tracking-normal text-[#20212A]">
+            Inicia sesión
+          </h1>
         </section>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-12 flex flex-col gap-4">
+          <span className="sr-only">{users.length} usuarios disponibles</span>
+
           <label className="block">
-            <span className="text-sm font-bold text-slate-700">Usuario</span>
+            <span className="sr-only">Usuario</span>
             <input
               type="text"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               disabled={isLoading || isSubmitting}
-              placeholder="Username"
+              placeholder="Correo electrónico *"
               autoComplete="username"
-              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-medium text-slate-900 outline-none focus:border-[#0057ff]"
+              className="h-[66px] w-full rounded-[18px] border border-[#D1D5DB] bg-white px-5 text-xl font-normal text-[#20212A] outline-none transition-colors placeholder:text-slate-500 focus:border-[#4B73F8] disabled:bg-slate-50 disabled:text-slate-400"
             />
           </label>
 
           <label className="block">
-            <span className="text-sm font-bold text-slate-700">Contrasena</span>
+            <span className="sr-only">Contrasena</span>
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               disabled={isLoading || isSubmitting}
-              placeholder="Password"
+              placeholder="Contraseña *"
               autoComplete="current-password"
-              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm font-medium text-slate-900 outline-none focus:border-[#0057ff]"
+              className="h-[66px] w-full rounded-[18px] border border-[#D1D5DB] bg-white px-5 text-xl font-normal text-[#20212A] outline-none transition-colors placeholder:text-slate-500 focus:border-[#4B73F8] disabled:bg-slate-50 disabled:text-slate-400"
             />
           </label>
 
@@ -103,26 +116,37 @@ function LoginPage({ onLogin, onClose }) {
 */}
 
           {error && (
-            <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+            <p className="rounded-[18px] border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
               {error}
             </p>
           )}
 
           <button
-            type="submit"
-            disabled={isLoading || isSubmitting || !username || !password}
-            className="w-full rounded-xl bg-[#0057ff] py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            type="button"
+            disabled
+            className="-mt-1 self-start text-base font-bold text-[#4B73F8] disabled:cursor-default disabled:opacity-100"
           >
-            {isSubmitting ? 'Entrando...' : 'Entrar'}
+            ¿Olvidaste tu contraseña?
           </button>
 
           <button
-            type="button"
-            disabled
-            className="w-full rounded-xl border border-slate-300 bg-slate-100 py-3 text-sm font-bold text-slate-400"
+            type="submit"
+            disabled={isLoading || isSubmitting || !username || !password}
+            className="mt-4 h-[62px] w-full rounded-full bg-[#4B73F8] text-xl font-medium text-white transition-colors hover:bg-[#3f64df] disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            Registrar
+            {isSubmitting ? 'Entrando...' : 'Iniciar sesión'}
           </button>
+
+          <p className="mt-2 text-center text-base text-[#20212A]">
+            ¿Aún no tienes cuenta?{' '}
+            <button
+              type="button"
+              disabled
+              className="font-bold text-[#4B73F8] disabled:cursor-default disabled:opacity-100"
+            >
+              Crear una cuenta
+            </button>
+          </p>
         </form>
       </main>
     </div>
