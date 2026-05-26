@@ -9,6 +9,8 @@
   "host_permissions": [
     "*://*.amazon.com.mx/*",
     "*://*.amazon.com/*",
+    "*://*.bodegaaurrera.com.mx/*",
+    "*://bodegaaurrera.com.mx/*",
     "http://127.0.0.1:3001/*",
     "http://localhost:3001/*"
   ],
@@ -17,7 +19,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.amazon.com.mx/*", "*://*.amazon.com/*"],
+      "matches": ["*://*.amazon.com.mx/*", "*://*.amazon.com/*", "*://*.bodegaaurrera.com.mx/*", "*://bodegaaurrera.com.mx/*"],
       "js": ["assets/content.js"], 
       "run_at": "document_idle"
     }

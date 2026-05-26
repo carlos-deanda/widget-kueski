@@ -12,6 +12,19 @@ function extraerPrecio() {
     '.apexPriceToPay'              // Otro común
   ];
 
+  // Selectores adicionales para Bodega Aurrera y tiendas similares
+  selectores.push(
+    '[itemprop="price"]',
+    '.price',
+    '.price-sales',
+    '.current-price',
+    '.precio',
+    '.product-price',
+    '.product-price__price',
+    '.price-final_price',
+    '.price__amount'
+  );
+
   for (let selector of selectores) {
     const elemento = document.querySelector(selector);
     if (elemento && elemento.innerText.trim() !== "") {
@@ -28,6 +41,16 @@ function extraerNombre() {
     'h1',                  // Genérico
     '.ui-pdp-title'        // Mercado Libre (por si acaso)
   ];
+
+  // Selectores comunes en tiendas como Bodega Aurrera
+  selectoresNombre.push(
+    'h1.product-title',
+    '.product-name',
+    '.product-main-info h1',
+    '.title',
+    '.product-title',
+    '.pdp-title'
+  );
 
   for (let selector of selectoresNombre) {
     const elemento = document.querySelector(selector);

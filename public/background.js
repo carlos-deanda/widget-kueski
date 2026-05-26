@@ -21,7 +21,7 @@ function notify(title, message, id = undefined) {
 
   return new Promise((resolve) => {
     const notifId = id || `kueski-${Date.now()}-${Math.random()}`;
-    const icon = chrome.runtime.getURL('images/kueski-logo.webp');
+    const icon = chrome.runtime.getURL('images/Kueski-Pay-Logo-Small.png');
     chrome.notifications.create(notifId, {
       type: 'basic',
       iconUrl: icon,
