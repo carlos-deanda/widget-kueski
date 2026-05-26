@@ -11,7 +11,7 @@ import ErrorPage from './ErrorPage.jsx';
 import { useNotifications } from '../components/useNotifications.js';
 
 // 1. Recibimos onClose desde las props
-function MenuPage({ user, onLogout, onClose }) {
+function MenuPage({ user, onLogout, onClose, storeDetection }) {
   const {
     error: notifyError,
     info: notifyInfo,
@@ -72,6 +72,19 @@ function MenuPage({ user, onLogout, onClose }) {
   const trackedProducts = dashboard?.trackedProducts || [];
   const [checkoutProduct, setCheckoutProduct] = useState(null);
 
+  const goToCheckoutWithProduct = (response = {}) => {
+    const baseProduct = trackedProducts.find((p) => p.id === selectedTrackingId) || trackedProducts[0] || {};
+    const productData = {
+      ...baseProduct,
+      name: response?.name || baseProduct.name || "Producto de Amazon",
+      currentPrice: response?.price || baseProduct.price || "0",
+    };
+
+    setCheckoutProduct(productData);
+    setCapturedPrice(response?.price || baseProduct?.price || '');
+    setScreen('checkout');
+  };
+
   const handleGoToCheckout = () => {
     if (!trackedProducts.length) {
       notifyWarning('No tienes productos en seguimiento para continuar al checkout.', { title: 'Sin productos' });
@@ -89,24 +102,19 @@ function MenuPage({ user, onLogout, onClose }) {
           tabs[0].id,
           { action: 'GET_PRODUCT_PRICE' },
           (response) => {
-            const baseProduct = trackedProducts.find((p) => p.id === selectedTrackingId) || trackedProducts[0] || {};
-            const productData = {
-              ...baseProduct,
-              name: response?.name || baseProduct.name || "Producto de Amazon",
-              currentPrice: response?.price || baseProduct.price || "0",
-            };
-            setCheckoutProduct(productData);
-            setCapturedPrice(response?.price || '');
-            setScreen('checkout');
+            if (chrome.runtime?.lastError) {
+              goToCheckoutWithProduct();
+              return;
+            }
+
+            goToCheckoutWithProduct(response);
           }
         );
       });
       return;
     }
-    const fallbackProduct = trackedProducts.find((p) => p.id === selectedTrackingId) || trackedProducts[0] || {};
-    setCheckoutProduct(fallbackProduct);
-    setCapturedPrice(fallbackProduct?.price || '$1,234.56');
-    setScreen('checkout');
+
+    goToCheckoutWithProduct({ price: '$1,234.56' });
   };
 
   const handleLogout = () => {
@@ -233,7 +241,7 @@ function MenuPage({ user, onLogout, onClose }) {
   }
 
   if (screen === 'success') {
-    return <SuccessPage onBack={() => setScreen('home')} onClose={onClose} />;
+    return <SuccessPage onBack={() => setScreen('home')} onClose={onClose} storeDetection={storeDetection} />;
   }
 
   if (screen === 'error') {
