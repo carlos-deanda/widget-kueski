@@ -90,6 +90,34 @@ async function getUserSnapshot(userId) {
   return snapshotsByUser[userId] || {};
 }
 
+async function sendRemotePriceAlert(userId, product, previousPrice, currentPrice) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/users/${userId}/price-alerts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        productName: product.name,
+        previousPrice,
+        currentPrice,
+        productId: product.productId || product.id,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'No se pudo enviar la alerta remota');
+    }
+
+    return data;
+  } catch (error) {
+    console.warn('Remote price alert failed', error);
+    return null;
+  }
+}
+
 async function handlePriceCheck({ forceNotifyDown = false } = {}) {
   const userId = await getStoredValue(ACTIVE_USER_KEY, null);
   if (!userId) {
@@ -98,8 +126,12 @@ async function handlePriceCheck({ forceNotifyDown = false } = {}) {
 
   const data = await fetchDashboard(userId);
   const trackedProducts = Array.isArray(data?.trackedProducts) ? data.trackedProducts : [];
+  const preferences = data?.user?.priceNotificationPreferences || {};
   const previousSnapshot = await getUserSnapshot(userId);
   const notifications = [];
+  const remoteAlerts = [];
+  let emailAlertsSent = 0;
+  let calendarAlertsSent = 0;
 
   for (const product of trackedProducts) {
     const currentPrice = Number(product.currentPrice || 0);
@@ -109,24 +141,51 @@ async function handlePriceCheck({ forceNotifyDown = false } = {}) {
     const shouldNotify = forceNotifyDown ? product.trend === 'down' : priceDropped;
 
     if (shouldNotify) {
-      const previousLabel = formatCurrency(previousPrice);
+      const alertPreviousPrice = forceNotifyDown && previousPrice >= currentPrice
+        ? currentPrice * 1.1
+        : previousPrice;
+      const previousLabel = formatCurrency(alertPreviousPrice);
       const currentLabel = formatCurrency(currentPrice);
       const title = forceNotifyDown ? 'Oferta detectada' : 'Bajada de precio detectada';
       const message = `${product.name} bajó de ${previousLabel} a ${currentLabel}.`;
 
-      notifications.push({ title, message });
+      if (preferences.browser) {
+        notifications.push({ title, message });
+        await notify(title, message, `price-${userId}-${product.id}`);
+      }
 
-      await notify(title, message, `price-${userId}-${product.id}`);
+      if (preferences.email || preferences.googleCalendar) {
+        remoteAlerts.push(
+          sendRemotePriceAlert(userId, product, alertPreviousPrice, currentPrice),
+        );
+      }
+    }
+  }
+
+  if (remoteAlerts.length > 0) {
+    const remoteResults = await Promise.all(remoteAlerts);
+    for (const result of remoteResults) {
+      if (result?.emailSent) {
+        emailAlertsSent += 1;
+      }
+      if (result?.calendarEventCreated) {
+        calendarAlertsSent += 1;
+      }
     }
   }
 
   await updateUserSnapshot(userId, trackedProducts);
 
+  const alertsSent = notifications.length + emailAlertsSent + calendarAlertsSent;
+
   return {
     ok: true,
     userId,
     trackedProducts: trackedProducts.length,
-    notificationsSent: notifications.length,
+    notificationsSent: alertsSent,
+    browserNotificationsSent: notifications.length,
+    emailAlertsSent,
+    calendarAlertsSent,
     notifications,
   };
 }
