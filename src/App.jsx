@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import LoginPage from './pages/LoginPage.jsx';
 import MenuPage from './pages/MenuPage.jsx';
+import NotificationPreferencesPage from './pages/NotificationPreferencesPage.jsx';
 import { NotificationProvider } from './components/NotificationCenter.jsx';
+import { getNotificationPreferences } from './api.js';
 
 const SESSION_STORAGE_KEY = 'kueski_widget_session_v1';
 const SESSION_DURATION_HOURS = 6;
@@ -44,6 +46,9 @@ function clearSession() {
 
 function App() {
   const [user, setUser] = useState(null);
+  const [needsPreferencesSetup, setNeedsPreferencesSetup] = useState(false);
+  const [preferencesMode, setPreferencesMode] = useState('setup');
+  const [isBootstrappingSession, setIsBootstrappingSession] = useState(true);
 
   useEffect(() => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
@@ -59,16 +64,62 @@ function App() {
   }, [user]);
 
   useEffect(() => {
+    let isMounted = true;
+
     const storedUser = getStoredSession();
 
-    if (storedUser) {
-      setUser(storedUser);
+    if (!storedUser) {
+      setIsBootstrappingSession(false);
+      return () => {
+        isMounted = false;
+      };
     }
+
+    getNotificationPreferences(storedUser.id)
+      .then(({ user: freshUser }) => {
+        if (!isMounted) return;
+        persistSession(freshUser);
+        setUser(freshUser);
+        setNeedsPreferencesSetup(!freshUser.priceNotificationPreferences?.configured);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setUser(storedUser);
+        setNeedsPreferencesSetup(!storedUser.priceNotificationPreferences?.configured);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsBootstrappingSession(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleLogin = (nextUser) => {
     persistSession(nextUser);
     setUser(nextUser);
+    setPreferencesMode('setup');
+    setNeedsPreferencesSetup(!nextUser.priceNotificationPreferences?.configured);
+  };
+
+  const handlePreferencesComplete = (updatedUser) => {
+    persistSession(updatedUser);
+    setUser(updatedUser);
+    setNeedsPreferencesSetup(false);
+    setPreferencesMode('setup');
+  };
+
+  const handleOpenPreferences = () => {
+    setPreferencesMode('edit');
+    setNeedsPreferencesSetup(true);
+  };
+
+  const handleCancelPreferences = () => {
+    setNeedsPreferencesSetup(false);
+    setPreferencesMode('setup');
   };
 
   const handleLogout = () => {
@@ -84,9 +135,21 @@ function App() {
   // Si no hay usuario, pasamos onClose al LoginPage
   return (
     <NotificationProvider>
-      {!user ? (
+      {isBootstrappingSession ? (
+        <div className="flex h-full w-full items-center justify-center bg-white text-sm font-medium text-[#6B7280]">
+          Cargando sesión...
+        </div>
+      ) : !user ? (
         <LoginPage
           onLogin={handleLogin}
+          onClose={handleCloseWidget}
+        />
+      ) : needsPreferencesSetup ? (
+        <NotificationPreferencesPage
+          user={user}
+          mode={preferencesMode}
+          onComplete={handlePreferencesComplete}
+          onCancel={handleCancelPreferences}
           onClose={handleCloseWidget}
         />
       ) : (
@@ -94,6 +157,7 @@ function App() {
           user={user}
           onLogout={handleLogout}
           onClose={handleCloseWidget}
+          onEditNotificationPreferences={handleOpenPreferences}
         />
       )}
     </NotificationProvider>

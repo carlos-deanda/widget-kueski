@@ -5,13 +5,13 @@ import PriceTrackingPage from './PriceTrackingPage.jsx';
 import CreditPage from './CreditPage.jsx';
 import IdentityVerificationPage from './IdentityVerificationPage.jsx';
 import TopBar from '../components/TopBar.jsx';
-import { getDashboard } from '../api.js';
+import { getDashboard, sendTestPriceAlertEmail } from '../api.js';
 import SuccessPage from './SuccessPage.jsx';
 import ErrorPage from './ErrorPage.jsx';
 import { useNotifications } from '../components/useNotifications.js';
 
 // 1. Recibimos onClose desde las props
-function MenuPage({ user, onLogout, onClose }) {
+function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
   const {
     error: notifyError,
     info: notifyInfo,
@@ -48,7 +48,8 @@ function MenuPage({ user, onLogout, onClose }) {
         }
 
         const discountedProducts = (data.trackedProducts || []).filter((product) => product.trend === 'down');
-        if (discountedProducts.length > 0) {
+        const browserAlertsEnabled = data.user?.priceNotificationPreferences?.browser === true;
+        if (discountedProducts.length > 0 && browserAlertsEnabled) {
           notifyInfo(
             `Hay ${discountedProducts.length} producto(s) con precio a la baja.`,
             { title: 'Alerta de precios', native: true, duration: 5000 },
@@ -70,7 +71,14 @@ function MenuPage({ user, onLogout, onClose }) {
 
   const activePurchases = dashboard?.activePurchases || [];
   const trackedProducts = dashboard?.trackedProducts || [];
+  const notificationPreferences = currentUser?.priceNotificationPreferences || {};
   const [checkoutProduct, setCheckoutProduct] = useState(null);
+
+  const preferenceLabels = [
+    notificationPreferences.browser ? 'Navegador' : null,
+    notificationPreferences.email ? 'Correo' : null,
+    notificationPreferences.googleCalendar ? 'Google Calendar' : null,
+  ].filter(Boolean);
 
   const handleGoToCheckout = () => {
     if (!trackedProducts.length) {
@@ -163,15 +171,40 @@ function MenuPage({ user, onLogout, onClose }) {
           return;
         }
 
-        const sent = response.result?.notificationsSent || 0;
-        notifySuccess(
-          sent > 0
-            ? `Revisión lista: se enviaron ${sent} notificación(es) de precio.`
-            : 'Revisión lista: no hubo bajadas para notificar.',
+        const browserSent = response.result?.browserNotificationsSent || 0;
+        const emailSent = response.result?.emailAlertsSent || 0;
+        const calendarSent = response.result?.calendarAlertsSent || 0;
+        const totalSent = response.result?.notificationsSent || 0;
+
+        if (totalSent > 0) {
+          const parts = [];
+          if (browserSent > 0) parts.push(`${browserSent} en navegador`);
+          if (emailSent > 0) parts.push(`${emailSent} por correo`);
+          if (calendarSent > 0) parts.push(`${calendarSent} en calendario`);
+          notifySuccess(`Revisión lista: ${parts.join(', ')}.`, { title: 'Chequeo de precios' });
+          return;
+        }
+
+        notifyWarning(
+          'No hubo bajadas para notificar. Usa "Probar correo" si solo quieres verificar Resend.',
           { title: 'Chequeo de precios' },
         );
       },
     );
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!notificationPreferences.email) {
+      notifyWarning('Activa las alertas por correo en Editar preferencias.', { title: 'Correo no activo' });
+      return;
+    }
+
+    try {
+      const data = await sendTestPriceAlertEmail(currentUser.id);
+      notifySuccess(data.message || `Correo enviado a ${data.sentTo}.`, { title: 'Correo de prueba' });
+    } catch (apiError) {
+      notifyError(apiError.message, { title: 'No se pudo enviar el correo' });
+    }
   };
 
   // 2. En todos los retornos, usamos 'onClose' en lugar de la función local
@@ -283,6 +316,40 @@ function MenuPage({ user, onLogout, onClose }) {
               Probar notificación
             </button>
             <button onClick={handleLogout} className="rounded-full border border-[#D1D5DB] bg-gray-50 px-3 py-2 text-xs font-bold text-[#20212A] transition-all hover:bg-gray-100 active:scale-[0.98]">Salir</button>
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-3xl border border-[#D1D5DB]/80 bg-white p-5 shadow-[0_10px_26px_rgba(32,33,42,0.06)]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase text-[#6B7280]">Alertas de precio</p>
+              <p className="mt-2 text-sm font-medium text-[#20212A]">
+                {preferenceLabels.length > 0
+                  ? preferenceLabels.join(' · ')
+                  : 'Sin preferencias configuradas'}
+              </p>
+              {notificationPreferences.googleCalendar && !currentUser.googleCalendarConnected && (
+                <p className="mt-2 text-xs font-medium text-[#D97706]">
+                  Google Calendar seleccionado, pero aún no está conectado.
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={onEditNotificationPreferences}
+                className="rounded-full border border-[#D1D5DB] bg-gray-50 px-4 py-2 text-xs font-bold text-[#20212A] transition-all hover:bg-gray-100 active:scale-[0.98]"
+              >
+                Editar
+              </button>
+              {notificationPreferences.email && (
+                <button
+                  onClick={handleSendTestEmail}
+                  className="rounded-full border border-[#4B73F8]/30 bg-[#EEF2FF] px-4 py-2 text-xs font-bold text-[#4B73F8] transition-all hover:bg-[#E0E7FF] active:scale-[0.98]"
+                >
+                  Probar correo
+                </button>
+              )}
+            </div>
           </div>
         </section>
 

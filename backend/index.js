@@ -8,8 +8,7 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const { google } = require('googleapis');
-const { hasEmailTransport, buildPriceDropEmail, buildTestEmail, sendEmail } = require('./services/emailAlerts');
-const { sendPriceDropEmailAlerts } = require('./services/priceAlerts');
+const { sendPriceDropEmail } = require('./services/emailService');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -30,6 +29,34 @@ const creditRequestLimitByRating = {
 const emailAlertIntervalMinutes = Number(process.env.PRICE_ALERT_EMAIL_INTERVAL_MINUTES || 0);
 const emailAlertsEnabled = String(process.env.ENABLE_PRICE_ALERT_EMAILS || '').toLowerCase() === 'true';
 let emailAlertIntervalId = null;
+
+async function ensureDatabaseSchema() {
+  await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS price_notify_browser BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS price_notify_email BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS price_notify_google_calendar BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS price_notification_preferences_set BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;
+  `);
+}
+
+const USER_SELECT_FIELDS = `
+  id,
+  name,
+  username,
+  email,
+  phone,
+  credit_rating,
+  credit_remaining,
+  identidad_verificada,
+  last_login_at,
+  price_notify_browser,
+  price_notify_email,
+  price_notify_google_calendar,
+  price_notification_preferences_set,
+  (google_refresh_token IS NOT NULL) AS google_calendar_connected
+`;
 
 function formatIcsDate(date) {
   return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
@@ -211,6 +238,13 @@ function mapUser(row) {
     identidadVerificada: row.identidad_verificada === true,
     creditRequestLimit: creditRequestLimitByRating[row.credit_rating] || creditRequestLimitByRating[1],
     lastLoginAt: row.last_login_at,
+    priceNotificationPreferences: {
+      browser: row.price_notify_browser === true,
+      email: row.price_notify_email === true,
+      googleCalendar: row.price_notify_google_calendar === true,
+      configured: row.price_notification_preferences_set === true,
+    },
+    googleCalendarConnected: row.google_calendar_connected === true,
   };
 }
 
@@ -311,6 +345,68 @@ function addDays(date, days) {
 
 function escapeGooglePrivatePropertyValue(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+async function insertGooglePriceAlertEvent(calendar, productName, previousPrice, currentPrice, productId) {
+  const today = new Date();
+  const endDate = addDays(today, 1);
+  const sourcePropertyValue = String(productId);
+
+  const existingEvents = await calendar.events.list({
+    calendarId: 'primary',
+    privateExtendedProperty: [`kueskiPriceAlert=${escapeGooglePrivatePropertyValue(sourcePropertyValue)}`],
+    maxResults: 1,
+    singleEvents: true,
+    timeMin: today.toISOString(),
+  });
+
+  if ((existingEvents.data.items || []).length > 0) {
+    return false;
+  }
+
+  await calendar.events.insert({
+    calendarId: 'primary',
+    requestBody: {
+      summary: `Bajada de precio: ${productName}`,
+      description: `El precio bajó de $${Number(previousPrice).toFixed(2)} a $${Number(currentPrice).toFixed(2)}.`,
+      start: { date: formatDateOnly(today) },
+      end: { date: formatDateOnly(endDate) },
+      extendedProperties: {
+        private: {
+          kueskiPriceAlert: sourcePropertyValue,
+        },
+      },
+    },
+  });
+
+  return true;
+}
+
+async function getGoogleCalendarClientForUser(userId) {
+  const result = await pool.query(
+    `
+      SELECT google_refresh_token
+      FROM users
+      WHERE id = $1
+    `,
+    [userId]
+  );
+
+  if (result.rowCount === 0 || !result.rows[0].google_refresh_token) {
+    return null;
+  }
+
+  const oauth2Client = getGoogleOAuthClient();
+  oauth2Client.setCredentials({ refresh_token: result.rows[0].google_refresh_token });
+  return google.calendar({ version: 'v3', auth: oauth2Client });
+}
+
+function normalizeNotificationPreferences(body) {
+  return {
+    browser: body?.browser === true,
+    email: body?.email === true,
+    googleCalendar: body?.googleCalendar === true,
+  };
 }
 
 async function insertGooglePaymentEvents(calendar, purchase, pendingPayments, sourceKey, sourceValue) {
@@ -417,7 +513,7 @@ app.get('/api/health', async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
+      SELECT ${USER_SELECT_FIELDS}
       FROM users
       ORDER BY credit_rating DESC, name ASC
     `);
@@ -446,7 +542,7 @@ app.post('/api/login', async (req, res) => {
         UPDATE users
         SET last_login_at = NOW()
         WHERE username = $1 AND password = $2
-        RETURNING id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
+        RETURNING ${USER_SELECT_FIELDS}
       `,
       [username, password]
     );
@@ -476,7 +572,7 @@ app.get('/api/users/:userId/dashboard', async (req, res) => {
     const [user, purchases, trackedProducts] = await Promise.all([
       pool.query(
         `
-          SELECT id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
+          SELECT ${USER_SELECT_FIELDS}
           FROM users
           WHERE id = $1
         `,
@@ -551,7 +647,7 @@ app.patch('/api/users/:userId/identity-verification', async (req, res) => {
         UPDATE users
         SET identidad_verificada = TRUE
         WHERE id = $1
-        RETURNING id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
+        RETURNING ${USER_SELECT_FIELDS}
       `,
       [userId]
     );
@@ -567,13 +663,225 @@ app.patch('/api/users/:userId/identity-verification', async (req, res) => {
   }
 });
 
+app.get('/api/users/:userId/notification-preferences', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT ${USER_SELECT_FIELDS}
+        FROM users
+        WHERE id = $1
+      `,
+      [userId]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    res.json({ user: mapUser(result.rows[0]) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/users/:userId/notification-preferences', async (req, res) => {
+  const { userId } = req.params;
+  const preferences = normalizeNotificationPreferences(req.body);
+
+  if (!preferences.browser && !preferences.email && !preferences.googleCalendar) {
+    res.status(400).json({ error: 'Selecciona al menos un canal de notificación.' });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        UPDATE users
+        SET
+          price_notify_browser = $2,
+          price_notify_email = $3,
+          price_notify_google_calendar = $4,
+          price_notification_preferences_set = TRUE
+        WHERE id = $1
+        RETURNING ${USER_SELECT_FIELDS}
+      `,
+      [userId, preferences.browser, preferences.email, preferences.googleCalendar]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    res.json({ user: mapUser(result.rows[0]) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/users/:userId/notifications/google/start', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const user = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
+
+    if (user.rowCount === 0) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const oauth2Client = getGoogleOAuthClient();
+    const state = encodeOAuthState({ notificationUserId: Number(userId) });
+    const authUrl = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/calendar.events'],
+      prompt: 'consent',
+      state,
+    });
+
+    res.redirect(authUrl);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/users/:userId/price-alerts/test', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT name, email, price_notify_email
+        FROM users
+        WHERE id = $1
+      `,
+      [userId]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const user = result.rows[0];
+
+    if (!user.price_notify_email) {
+      res.status(400).json({ error: 'Activa las alertas por correo en tus preferencias primero.' });
+      return;
+    }
+
+    const emailResult = await sendPriceDropEmail({
+      to: user.email,
+      userName: user.name,
+      productName: 'Producto de prueba Kueski',
+      previousPrice: 1999.99,
+      currentPrice: 1799.99,
+    });
+
+    if (!emailResult.sent) {
+      res.status(503).json({
+        error: emailResult.reason || 'No se pudo enviar el correo de prueba',
+        emailSent: false,
+      });
+      return;
+    }
+
+    res.json({
+      emailSent: true,
+      sentTo: user.email,
+      message: 'Correo de prueba enviado. Revisa tu bandeja en unos segundos.',
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/users/:userId/price-alerts', async (req, res) => {
+  const { userId } = req.params;
+  const { productName, previousPrice, currentPrice, productId } = req.body;
+
+  if (!productName || previousPrice === undefined || currentPrice === undefined) {
+    res.status(400).json({ error: 'productName, previousPrice and currentPrice are required' });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT
+          name,
+          email,
+          price_notify_email,
+          price_notify_google_calendar,
+          google_refresh_token
+        FROM users
+        WHERE id = $1
+      `,
+      [userId]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const user = result.rows[0];
+    const response = {
+      emailSent: false,
+      calendarEventCreated: false,
+    };
+
+    if (user.price_notify_email) {
+      try {
+        const emailResult = await sendPriceDropEmail({
+          to: user.email,
+          userName: user.name,
+          productName,
+          previousPrice,
+          currentPrice,
+        });
+        response.emailSent = emailResult.sent === true;
+        if (!emailResult.sent) {
+          response.emailSkippedReason = emailResult.reason;
+        }
+      } catch (emailError) {
+        response.emailError = emailError.message;
+      }
+    }
+
+    if (user.price_notify_google_calendar && user.google_refresh_token) {
+      try {
+        const calendar = await getGoogleCalendarClientForUser(userId);
+        if (calendar) {
+          response.calendarEventCreated = await insertGooglePriceAlertEvent(
+            calendar,
+            productName,
+            previousPrice,
+            currentPrice,
+            productId || productName
+          );
+        }
+      } catch (calendarError) {
+        response.calendarError = calendarError.message;
+      }
+    }
+
+    res.json(response);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/users/:userId/credit-options', async (req, res) => {
   const { userId } = req.params;
 
   try {
     const result = await pool.query(
       `
-        SELECT id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
+        SELECT ${USER_SELECT_FIELDS}
         FROM users
         WHERE id = $1
       `,
@@ -640,7 +948,7 @@ app.post('/api/users/:userId/credit-requests', async (req, res) => {
 
     const userResult = await client.query(
       `
-        SELECT id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
+        SELECT ${USER_SELECT_FIELDS}
         FROM users
         WHERE id = $1
         FOR UPDATE
@@ -701,7 +1009,7 @@ app.post('/api/users/:userId/credit-requests', async (req, res) => {
         UPDATE users
         SET credit_remaining = credit_remaining + $1
         WHERE id = $2
-        RETURNING id, name, username, email, phone, credit_rating, credit_remaining, identidad_verificada, last_login_at
+        RETURNING ${USER_SELECT_FIELDS}
       `,
       [requestedAmount, userId]
     );
@@ -820,11 +1128,14 @@ app.get('/api/integrations/google/calendar/callback', async (req, res) => {
 
   let purchaseId;
   let checkoutCalendarPayload;
+  let notificationUserId;
 
   try {
     const parsedState = decodeOAuthState(String(state));
     if (parsedState.checkoutCalendar) {
       checkoutCalendarPayload = parsedState.checkoutCalendar;
+    } else if (parsedState.notificationUserId) {
+      notificationUserId = Number(parsedState.notificationUserId);
     } else {
       purchaseId = Number(parsedState.purchaseId);
     }
@@ -838,6 +1149,34 @@ app.get('/api/integrations/google/calendar/callback', async (req, res) => {
     const { tokens } = await oauth2Client.getToken(String(code));
     oauth2Client.setCredentials(tokens);
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    if (notificationUserId) {
+      if (!tokens.refresh_token) {
+        res.status(400).send('Google no devolvió un refresh token. Vuelve a autorizar con consentimiento.');
+        return;
+      }
+
+      await pool.query(
+        `
+          UPDATE users
+          SET google_refresh_token = $1
+          WHERE id = $2
+        `,
+        [tokens.refresh_token, notificationUserId]
+      );
+
+      res.send(`
+        <!DOCTYPE html>
+        <html lang="es">
+          <body style="font-family: Arial, sans-serif; padding: 32px; color: #20212A;">
+            <h1>Google Calendar conectado</h1>
+            <p>Tus alertas de precio ya pueden sincronizarse con Google Calendar.</p>
+            <p>Puedes cerrar esta pestaña y volver al widget de Kueski.</p>
+          </body>
+        </html>
+      `);
+      return;
+    }
 
     if (checkoutCalendarPayload) {
       const { purchase, pendingPayments } = buildCheckoutCalendarData(checkoutCalendarPayload);
@@ -1157,9 +1496,18 @@ if (emailAlertsEnabled && emailAlertIntervalMinutes > 0) {
   console.log(`Email price alerts enabled every ${emailAlertIntervalMinutes} minute(s)`);
 }
 
-app.listen(port, host, () => {
-  console.log(`Backend listening on http://${host}:${port}`);
-  if (emailAlertIntervalId) {
-    console.log('Email alert polling is active');
+(async () => {
+  try {
+    await ensureDatabaseSchema();
+
+    app.listen(port, host, () => {
+      console.log(`Backend listening on http://${host}:${port}`);
+      if (emailAlertIntervalId) {
+        console.log('Email alert polling is active');
+      }
+    });
+  } catch (error) {
+    console.error('Failed to initialize database schema', error);
+    process.exit(1);
   }
-});
+})();
