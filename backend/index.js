@@ -26,6 +26,21 @@ const creditRequestLimitByRating = {
   5: 10000,
 };
 
+const emailAlertIntervalMinutes = Number(process.env.PRICE_ALERT_EMAIL_INTERVAL_MINUTES || 0);
+const emailAlertsEnabled = String(process.env.ENABLE_PRICE_ALERT_EMAILS || '').toLowerCase() === 'true';
+let emailAlertIntervalId = null;
+
+async function ensureDatabaseSchema() {
+  await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS price_notify_browser BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS price_notify_email BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS price_notify_google_calendar BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS price_notification_preferences_set BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;
+  `);
+}
+
 const USER_SELECT_FIELDS = `
   id,
   name,
@@ -231,6 +246,67 @@ function mapUser(row) {
     },
     googleCalendarConnected: row.google_calendar_connected === true,
   };
+}
+
+function getEmailAlertStatus() {
+  return {
+    enabled: emailAlertsEnabled,
+    intervalMinutes: emailAlertIntervalMinutes,
+    smtpConfigured: hasEmailTransport(),
+  };
+}
+
+async function runEmailPriceAlerts() {
+  if (!hasEmailTransport()) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: 'SMTP not configured',
+      ...getEmailAlertStatus(),
+    };
+  }
+
+  const result = await sendPriceDropEmailAlerts(pool, {
+    sendEmail,
+    buildPriceDropEmail,
+  });
+
+  return {
+    ok: true,
+    ...getEmailAlertStatus(),
+    ...result,
+  };
+}
+
+async function sendEmailTestToUser(userId, customMessage) {
+  const result = await pool.query(
+    `
+      SELECT id, name, email
+      FROM users
+      WHERE id = $1
+    `,
+    [userId]
+  );
+
+  if (result.rowCount === 0) {
+    const error = new Error('User not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const user = result.rows[0];
+  const emailPayload = buildTestEmail({
+    message: customMessage || `Hola ${user.name}, este es un correo de prueba de Kueski Widget.`,
+  });
+
+  await sendEmail({
+    to: user.email,
+    subject: emailPayload.subject,
+    text: emailPayload.text,
+    html: emailPayload.html,
+  });
+
+  return { userId: user.id, email: user.email };
 }
 
 function money(value) {
@@ -1364,6 +1440,74 @@ app.get('/api/price-trackings/:trackingId', async (req, res) => {
   }
 });
 
-app.listen(port, host, () => {
-  console.log(`Backend listening on http://${host}:${port}`);
+app.get('/api/notifications/email/status', (req, res) => {
+  res.json({
+    ok: true,
+    ...getEmailAlertStatus(),
+  });
 });
+
+app.post('/api/notifications/email/test', async (req, res) => {
+  try {
+    if (!hasEmailTransport()) {
+      res.status(503).json({
+        ok: false,
+        error: 'SMTP not configured',
+        ...getEmailAlertStatus(),
+      });
+      return;
+    }
+
+    const userId = Number(req.body.userId || 0);
+    if (!userId) {
+      res.status(400).json({ ok: false, error: 'userId is required' });
+      return;
+    }
+
+    const result = await sendEmailTestToUser(userId, req.body.message);
+    res.json({ ok: true, ...getEmailAlertStatus(), email: result.email });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/notifications/email/price-check', async (req, res) => {
+  try {
+    const result = await runEmailPriceAlerts();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message, ...getEmailAlertStatus() });
+  }
+});
+
+if (emailAlertsEnabled && emailAlertIntervalMinutes > 0) {
+  const intervalMs = emailAlertIntervalMinutes * 60 * 1000;
+  emailAlertIntervalId = setInterval(async () => {
+    try {
+      const result = await runEmailPriceAlerts();
+      if (result.sent > 0) {
+        console.log(`Email alerts sent: ${result.sent}`);
+      }
+    } catch (error) {
+      console.warn('Email alert interval failed', error);
+    }
+  }, intervalMs);
+
+  console.log(`Email price alerts enabled every ${emailAlertIntervalMinutes} minute(s)`);
+}
+
+(async () => {
+  try {
+    await ensureDatabaseSchema();
+
+    app.listen(port, host, () => {
+      console.log(`Backend listening on http://${host}:${port}`);
+      if (emailAlertIntervalId) {
+        console.log('Email alert polling is active');
+      }
+    });
+  } catch (error) {
+    console.error('Failed to initialize database schema', error);
+    process.exit(1);
+  }
+})();

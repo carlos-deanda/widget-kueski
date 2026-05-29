@@ -1,16 +1,58 @@
-# React + Vite
+# Widget Kueski
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Widget Kueski is a React + Vite extension widget with a Node.js/Express backend and PostgreSQL database.
 
-Currently, two official plugins are available:
+## Email price alerts
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+The backend can now send price-drop emails to tracked users.
 
-## React Compiler
+### Required SMTP env vars
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Add these to `backend/.env`:
 
-## Expanding the ESLint configuration
+```dotenv
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your-user@example.com
+SMTP_PASS=your-password
+SMTP_FROM=Kueski Widget <your-user@example.com>
+# Optional
+SMTP_SECURE=false
+ENABLE_PRICE_ALERT_EMAILS=true
+PRICE_ALERT_EMAIL_INTERVAL_MINUTES=15
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### Manual test endpoints
+
+- `GET /api/notifications/email/status`
+- `POST /api/notifications/email/test` with `{ "userId": 1 }`
+- `POST /api/notifications/email/price-check`
+
+If SMTP is not configured, the endpoints return `503` and the alerts job stays disabled.
+
+### Database change
+
+Run the backend schema again so PostgreSQL creates the new `notification_logs` table.
+
+## Development
+
+### Frontend
+
+```bash
+npm install
+npm run dev
+```
+
+### Backend
+
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+### Build
+
+```bash
+npm run build
+```

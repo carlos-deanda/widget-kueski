@@ -98,6 +98,19 @@ CREATE TABLE IF NOT EXISTS price_history (
   recorded_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS notification_logs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  product_id INTEGER REFERENCES products(id),
+  channel TEXT NOT NULL,
+  event_type TEXT NOT NULL DEFAULT 'price_drop',
+  price_history_id INTEGER,
+  current_price NUMERIC(10, 2) NOT NULL,
+  previous_price NUMERIC(10, 2),
+  sent_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (user_id, product_id, channel, event_type, price_history_id)
+);
+
 CREATE TABLE IF NOT EXISTS login_events (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id),
