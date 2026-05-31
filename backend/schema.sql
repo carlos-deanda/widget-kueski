@@ -45,6 +45,18 @@ ALTER TABLE users
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;
 
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS verification_level TEXT NOT NULL DEFAULT 'none' CHECK (verification_level IN ('none', 'partial', 'full'));
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS phone_verification_code TEXT;
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS phone_verification_expires_at TIMESTAMP;
+
 CREATE TABLE IF NOT EXISTS products (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,

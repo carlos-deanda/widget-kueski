@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import TopBar from '../components/TopBar.jsx';
-import { verifyUserIdentity } from '../api.js';
+import { startPhoneVerification, verifyPhoneCode, verifyUserIdentity } from '../api.js';
 
 const STEP_DURATION_MS = 2000;
 const INITIAL_STEP_STATUS = {
@@ -9,7 +9,17 @@ const INITIAL_STEP_STATUS = {
   address: 'idle',
 };
 
-function IdentityVerificationPage({ user, onVerified, onClose }) {
+function IdentityVerificationPage({ user, onVerified, onClose, onUserUpdated }) {
+  const initialPhoneVerified = user?.phoneVerified === true
+    || user?.verificationLevel === 'partial'
+    || user?.verificationLevel === 'full'
+    || user?.identidadVerificada === true;
+  const [profileUser, setProfileUser] = useState(user);
+  const [phoneVerified, setPhoneVerified] = useState(initialPhoneVerified);
+  const [phoneCode, setPhoneCode] = useState('');
+  const [simulatedPhoneCode, setSimulatedPhoneCode] = useState('');
+  const [isSendingPhoneCode, setIsSendingPhoneCode] = useState(false);
+  const [isVerifyingPhoneCode, setIsVerifyingPhoneCode] = useState(false);
   const [stepStatus, setStepStatus] = useState(INITIAL_STEP_STATUS);
   const [postalCode, setPostalCode] = useState('');
   const [message, setMessage] = useState({
@@ -33,6 +43,65 @@ function IdentityVerificationPage({ user, onVerified, onClose }) {
     }, STEP_DURATION_MS);
 
     timeouts.current.push(timeoutId);
+  };
+
+  const handleStartPhoneVerification = async () => {
+    setIsSendingPhoneCode(true);
+    setPhoneCode('');
+    setSimulatedPhoneCode('');
+    setMessage({
+      type: 'info',
+      text: 'Generando código SMS simulado...',
+    });
+
+    try {
+      const data = await startPhoneVerification(user.id);
+      setSimulatedPhoneCode(data.code);
+      setMessage({
+        type: 'info',
+        text: 'Código SMS simulado generado. Ingrésalo para validar tu teléfono.',
+      });
+    } catch (apiError) {
+      setMessage({
+        type: 'error',
+        text: apiError.message || 'No se pudo generar el código de verificación.',
+      });
+    } finally {
+      setIsSendingPhoneCode(false);
+    }
+  };
+
+  const handlePhoneCodeChange = (event) => {
+    setPhoneCode(event.target.value.replace(/\D/g, '').slice(0, 6));
+  };
+
+  const handleVerifyPhoneCode = async (event) => {
+    event.preventDefault();
+    setIsVerifyingPhoneCode(true);
+    setMessage({
+      type: 'info',
+      text: 'Validando código SMS simulado...',
+    });
+
+    try {
+      const data = await verifyPhoneCode(user.id, phoneCode);
+      setProfileUser(data.user);
+      onUserUpdated?.(data.user);
+      setPhoneVerified(true);
+      setPhoneCode('');
+      setSimulatedPhoneCode('');
+      setMessage({
+        type: 'info',
+        text: 'Teléfono verificado. Ahora puedes continuar con tu INE, selfie y domicilio.',
+      });
+    } catch (apiError) {
+      setMessage({
+        type: 'error',
+        text: apiError.message || 'No se pudo validar el código.',
+      });
+    } finally {
+      setIsVerifyingPhoneCode(false);
+    }
   };
 
   const handleDocumentUpload = (event) => {
@@ -84,7 +153,9 @@ function IdentityVerificationPage({ user, onVerified, onClose }) {
     });
 
     try {
-      const data = await verifyUserIdentity(user.id);
+      const data = await verifyUserIdentity(profileUser?.id || user.id);
+      setProfileUser(data.user);
+      onUserUpdated?.(data.user);
       setVerifiedUser(data.user);
       setMessage({
         type: 'info',
@@ -157,8 +228,65 @@ function IdentityVerificationPage({ user, onVerified, onClose }) {
     return null;
   };
 
-  const canUploadSelfie = stepStatus.document === 'done';
-  const canVerifyAddress = stepStatus.selfie === 'done';
+  const renderPhoneVerification = () => (
+    <>
+      <section className="rounded-3xl border border-[#D1D5DB]/80 bg-white p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-[#20212A]">Valida tu teléfono</p>
+            <p className="mt-1 text-sm font-medium leading-relaxed text-[#6B7280]">
+              Generaremos un código SMS simulado de 6 dígitos.
+            </p>
+          </div>
+          <div className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-[#C2410C]">
+            Nivel 1
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleStartPhoneVerification}
+          disabled={isSendingPhoneCode || isVerifyingPhoneCode}
+          className="mt-4 w-full rounded-full bg-[#4B73F8] py-4 text-base font-bold text-white shadow-[0_10px_22px_rgba(75,115,248,0.25)] transition-all hover:bg-[#345ee8] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
+        >
+          {isSendingPhoneCode ? 'Enviando código...' : 'Enviar código'}
+        </button>
+
+        {simulatedPhoneCode && (
+          <p className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-medium text-[#4B73F8]">
+            Código SMS simulado: <span className="font-black">{simulatedPhoneCode}</span>
+          </p>
+        )}
+
+        <form onSubmit={handleVerifyPhoneCode} className="mt-4 space-y-4">
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength="6"
+            value={phoneCode}
+            onChange={handlePhoneCodeChange}
+            disabled={!simulatedPhoneCode || isVerifyingPhoneCode}
+            placeholder="000000"
+            className="w-full rounded-2xl border border-[#D1D5DB] bg-white px-5 py-4 text-center text-2xl font-bold text-[#20212A] outline-none transition-colors placeholder:text-gray-400 focus:border-[#4B73F8] focus:ring-2 focus:ring-[#4B73F8]/15 disabled:bg-gray-50 disabled:text-gray-400"
+          />
+
+          <button
+            type="submit"
+            disabled={!simulatedPhoneCode || phoneCode.length !== 6 || isVerifyingPhoneCode}
+            className="w-full rounded-full bg-[#20212A] py-4 text-base font-bold text-white shadow-[0_10px_22px_rgba(32,33,42,0.16)] transition-all hover:bg-black active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
+          >
+            {isVerifyingPhoneCode ? 'Validando...' : 'Verificar código'}
+          </button>
+        </form>
+      </section>
+
+      {renderMessage()}
+    </>
+  );
+
+  const canUploadSelfie = phoneVerified && stepStatus.document === 'done';
+  const canVerifyAddress = phoneVerified && stepStatus.selfie === 'done';
 
   if (verifiedUser) {
     return (
@@ -203,7 +331,7 @@ function IdentityVerificationPage({ user, onVerified, onClose }) {
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-[#6B7280]">
-                {user?.name} · validación simulada
+                {profileUser?.name || user?.name} · validación simulada
               </p>
               <h2 className="mt-1 text-3xl font-bold leading-tight text-[#20212A]">
                 Verificación de identidad
@@ -216,7 +344,10 @@ function IdentityVerificationPage({ user, onVerified, onClose }) {
             </div>
           </div>
 
-          <div className="space-y-4">
+          {!phoneVerified ? (
+            renderPhoneVerification()
+          ) : (
+            <div className="space-y-4">
             <label className="block rounded-3xl border border-[#D1D5DB]/80 bg-white p-4 shadow-sm">
               <span className="text-sm font-bold text-[#20212A]">
                 Sube una foto de tu INE
@@ -301,9 +432,10 @@ function IdentityVerificationPage({ user, onVerified, onClose }) {
                 Verificar domicilio
               </button>
             </form>
-          </div>
+            </div>
+          )}
 
-          {renderMessage()}
+          {phoneVerified && renderMessage()}
         </div>
       </main>
     </div>

@@ -86,6 +86,19 @@ export function verifyUserIdentity(userId) {
   });
 }
 
+export function startPhoneVerification(userId) {
+  return request(`/api/users/${userId}/phone-verification/start`, {
+    method: 'POST',
+  });
+}
+
+export function verifyPhoneCode(userId, code) {
+  return request(`/api/users/${userId}/phone-verification/verify`, {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+}
+
 export function getCreditOptions(userId) {
   return request(`/api/users/${userId}/credit-options`);
 }

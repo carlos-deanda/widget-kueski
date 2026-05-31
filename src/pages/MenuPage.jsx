@@ -79,6 +79,32 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
     notificationPreferences.email ? 'Correo' : null,
     notificationPreferences.googleCalendar ? 'Google Calendar' : null,
   ].filter(Boolean);
+  const verificationLevel = currentUser?.verificationLevel
+    || (currentUser?.identidadVerificada ? 'full' : currentUser?.phoneVerified ? 'partial' : 'none');
+  const verificationStatusByLevel = {
+    none: {
+      label: 'No verificado',
+      dotClass: 'bg-[#F97316]',
+      textClass: 'text-[#C2410C]',
+      bgClass: 'bg-orange-50',
+      borderClass: 'border-orange-100',
+    },
+    partial: {
+      label: 'Verificación parcial',
+      dotClass: 'bg-[#EAB308]',
+      textClass: 'text-[#A16207]',
+      bgClass: 'bg-yellow-50',
+      borderClass: 'border-yellow-100',
+    },
+    full: {
+      label: 'Verificado',
+      dotClass: 'bg-[#16A34A]',
+      textClass: 'text-[#16A34A]',
+      bgClass: 'bg-green-50',
+      borderClass: 'border-green-100',
+    },
+  };
+  const verificationStatus = verificationStatusByLevel[verificationLevel] || verificationStatusByLevel.none;
 
   const handleGoToCheckout = () => {
     if (!trackedProducts.length) {
@@ -217,6 +243,10 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
       <IdentityVerificationPage
         user={currentUser}
         onClose={onClose}
+        onUserUpdated={(updatedUser) => {
+          setCurrentUser(updatedUser);
+          setDashboard((previous) => previous ? { ...previous, user: updatedUser } : previous);
+        }}
         onVerified={(updatedUser) => {
           setCurrentUser(updatedUser);
           setDashboard((previous) => previous ? { ...previous, user: updatedUser } : previous);
@@ -284,6 +314,10 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-[#6B7280]">Hola, {currentUser.name}</p>
+              <div className={`mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold ${verificationStatus.bgClass} ${verificationStatus.borderClass} ${verificationStatus.textClass}`}>
+                <span className={`h-2.5 w-2.5 rounded-full ${verificationStatus.dotClass}`} />
+                {verificationStatus.label}
+              </div>
               <h1 className="mt-1 text-3xl font-bold leading-tight text-[#20212A]">Menú principal</h1>
             </div>
             <div className="rounded-full bg-[#EEF2FF] px-3 py-1 text-xs font-bold text-[#4B73F8]">

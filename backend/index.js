@@ -37,7 +37,11 @@ async function ensureDatabaseSchema() {
       ADD COLUMN IF NOT EXISTS price_notify_email BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS price_notify_google_calendar BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS price_notification_preferences_set BOOLEAN NOT NULL DEFAULT FALSE,
-      ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;
+      ADD COLUMN IF NOT EXISTS google_refresh_token TEXT,
+      ADD COLUMN IF NOT EXISTS verification_level TEXT NOT NULL DEFAULT 'none' CHECK (verification_level IN ('none', 'partial', 'full')),
+      ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS phone_verification_code TEXT,
+      ADD COLUMN IF NOT EXISTS phone_verification_expires_at TIMESTAMP;
   `);
 }
 
@@ -50,6 +54,8 @@ const USER_SELECT_FIELDS = `
   credit_rating,
   credit_remaining,
   identidad_verificada,
+  verification_level,
+  phone_verified,
   last_login_at,
   price_notify_browser,
   price_notify_email,
@@ -227,6 +233,14 @@ async function openIcsInAppleCalendar(ics, purchaseId) {
 }
 
 function mapUser(row) {
+  const identidadVerificada = row.identidad_verificada === true;
+  const storedVerificationLevel = row.verification_level || 'none';
+  const verificationLevel = identidadVerificada
+    ? 'full'
+    : row.phone_verified === true && storedVerificationLevel === 'none'
+      ? 'partial'
+      : storedVerificationLevel;
+
   return {
     id: row.id,
     name: row.name,
@@ -235,7 +249,9 @@ function mapUser(row) {
     phone: row.phone,
     creditRating: row.credit_rating,
     creditRemaining: money(row.credit_remaining),
-    identidadVerificada: row.identidad_verificada === true,
+    identidadVerificada,
+    verificationLevel,
+    phoneVerified: row.phone_verified === true || ['partial', 'full'].includes(verificationLevel),
     creditRequestLimit: creditRequestLimitByRating[row.credit_rating] || creditRequestLimitByRating[1],
     lastLoginAt: row.last_login_at,
     priceNotificationPreferences: {
@@ -311,6 +327,10 @@ async function sendEmailTestToUser(userId, customMessage) {
 
 function money(value) {
   return Number(value || 0);
+}
+
+function generateVerificationCode() {
+  return String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
 }
 
 function getGoogleOAuthClient() {
@@ -638,6 +658,100 @@ app.get('/api/users/:userId/dashboard', async (req, res) => {
   }
 });
 
+app.post('/api/users/:userId/phone-verification/start', async (req, res) => {
+  const { userId } = req.params;
+  const code = generateVerificationCode();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  try {
+    const result = await pool.query(
+      `
+        UPDATE users
+        SET
+          phone_verification_code = $2,
+          phone_verification_expires_at = $3
+        WHERE id = $1
+        RETURNING id
+      `,
+      [userId, code, expiresAt]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    res.json({
+      message: 'Verification code generated',
+      code,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/users/:userId/phone-verification/verify', async (req, res) => {
+  const { userId } = req.params;
+  const code = String(req.body?.code || '').trim();
+
+  if (!/^\d{6}$/.test(code)) {
+    res.status(400).json({ error: 'Codigo de verificacion invalido' });
+    return;
+  }
+
+  try {
+    const userResult = await pool.query(
+      `
+        SELECT id, phone_verification_code, phone_verification_expires_at
+        FROM users
+        WHERE id = $1
+      `,
+      [userId]
+    );
+
+    if (userResult.rowCount === 0) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const user = userResult.rows[0];
+    const expiresAt = user.phone_verification_expires_at
+      ? new Date(user.phone_verification_expires_at).getTime()
+      : 0;
+
+    if (user.phone_verification_code !== code) {
+      res.status(400).json({ error: 'Codigo de verificacion invalido' });
+      return;
+    }
+
+    if (!expiresAt || expiresAt < Date.now()) {
+      res.status(400).json({ error: 'Codigo de verificacion expirado' });
+      return;
+    }
+
+    const result = await pool.query(
+      `
+        UPDATE users
+        SET
+          phone_verified = TRUE,
+          verification_level = CASE
+            WHEN identidad_verificada = TRUE OR verification_level = 'full' THEN 'full'
+            ELSE 'partial'
+          END,
+          phone_verification_code = NULL,
+          phone_verification_expires_at = NULL
+        WHERE id = $1
+        RETURNING ${USER_SELECT_FIELDS}
+      `,
+      [userId]
+    );
+
+    res.json({ user: mapUser(result.rows[0]) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.patch('/api/users/:userId/identity-verification', async (req, res) => {
   const { userId } = req.params;
 
@@ -645,7 +759,9 @@ app.patch('/api/users/:userId/identity-verification', async (req, res) => {
     const result = await pool.query(
       `
         UPDATE users
-        SET identidad_verificada = TRUE
+        SET
+          identidad_verificada = TRUE,
+          verification_level = 'full'
         WHERE id = $1
         RETURNING ${USER_SELECT_FIELDS}
       `,

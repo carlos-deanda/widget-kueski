@@ -37,6 +37,7 @@ function CheckoutPage({ user, product, price, purchaseId, onBack, onResult, onCl
   const maxAllowed = limitsByLevel[userLevel];
 
   const isOverLimit = requestedAmount > maxAllowed;
+  const isIdentityVerified = user?.verificationLevel === 'full' || user?.identidadVerificada === true;
 
   const fee = requestedAmount * 0.1008;
   const totalCost = requestedAmount + fee;
@@ -52,7 +53,7 @@ function CheckoutPage({ user, product, price, purchaseId, onBack, onResult, onCl
   });
 
   const handleConfirmPurchase = () => {
-    if (user?.identidadVerificada === false) {
+    if (!isIdentityVerified) {
       notifyWarning('Debes verificar tu identidad antes de confirmar la compra.', {
         title: 'Verificación requerida',
       });
