@@ -64,14 +64,11 @@ async function ensureDatabaseSchema() {
       ADD COLUMN IF NOT EXISTS price_notify_email BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS price_notify_google_calendar BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS price_notification_preferences_set BOOLEAN NOT NULL DEFAULT FALSE,
-<<<<<<< HEAD
       ADD COLUMN IF NOT EXISTS google_refresh_token TEXT,
       ADD COLUMN IF NOT EXISTS verification_level TEXT NOT NULL DEFAULT 'none' CHECK (verification_level IN ('none', 'partial', 'full')),
       ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS phone_verification_code TEXT,
       ADD COLUMN IF NOT EXISTS phone_verification_expires_at TIMESTAMP;
-=======
-      ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;
 
     ALTER TABLE products
       ADD COLUMN IF NOT EXISTS product_url TEXT;
@@ -82,7 +79,6 @@ async function ensureDatabaseSchema() {
 
     CREATE UNIQUE INDEX IF NOT EXISTS price_trackings_user_product_unique
       ON price_trackings (user_id, product_id);
->>>>>>> feature/trackedProducts
   `);
 
   await Promise.all([
@@ -377,10 +373,10 @@ function money(value) {
   return Number(value || 0);
 }
 
-<<<<<<< HEAD
 function generateVerificationCode() {
   return String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
-=======
+}
+
 function parseMoneyInput(value) {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : 0;
@@ -424,7 +420,6 @@ function normalizePriceTrackingProduct(source) {
     productUrl,
     storeName,
   };
->>>>>>> feature/trackedProducts
 }
 
 function getGoogleOAuthClient() {
@@ -793,7 +788,6 @@ app.get('/api/users/:userId/dashboard', async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
 app.post('/api/users/:userId/phone-verification/start', async (req, res) => {
   const { userId } = req.params;
   const code = generateVerificationCode();
@@ -846,30 +840,10 @@ app.post('/api/users/:userId/phone-verification/verify', async (req, res) => {
     );
 
     if (userResult.rowCount === 0) {
-=======
-app.post('/api/users/:userId/price-trackings', async (req, res) => {
-  const { userId } = req.params;
-  const normalized = normalizePriceTrackingProduct(req.body);
-
-  if (!normalized.productName || !normalized.currentPrice || !normalized.productUrl) {
-    res.status(400).json({ error: 'productName, currentPrice and productUrl are required' });
-    return;
-  }
-
-  const client = await pool.connect();
-
-  try {
-    await client.query('BEGIN');
-
-    const userResult = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
-    if (userResult.rowCount === 0) {
-      await client.query('ROLLBACK');
->>>>>>> feature/trackedProducts
       res.status(404).json({ error: 'User not found' });
       return;
     }
 
-<<<<<<< HEAD
     const user = userResult.rows[0];
     const expiresAt = user.phone_verification_expires_at
       ? new Date(user.phone_verification_expires_at).getTime()
@@ -905,7 +879,30 @@ app.post('/api/users/:userId/price-trackings', async (req, res) => {
     res.json({ user: mapUser(result.rows[0]) });
   } catch (error) {
     res.status(500).json({ error: error.message });
-=======
+  }
+});
+
+app.post('/api/users/:userId/price-trackings', async (req, res) => {
+  const { userId } = req.params;
+  const normalized = normalizePriceTrackingProduct(req.body);
+
+  if (!normalized.productName || !normalized.currentPrice || !normalized.productUrl) {
+    res.status(400).json({ error: 'productName, currentPrice and productUrl are required' });
+    return;
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const userResult = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (userResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
     const productResult = await client.query(
       `
         INSERT INTO products (name, store_name, current_price, product_url)
@@ -979,7 +976,6 @@ app.post('/api/users/:userId/price-trackings', async (req, res) => {
     res.status(500).json({ error: error.message });
   } finally {
     client.release();
->>>>>>> feature/trackedProducts
   }
 });
 
