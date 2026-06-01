@@ -40,6 +40,16 @@ function PriceTrackingPage({ trackingId, onBack, onCheckout, onClose }) { // Se 
 
   // Variable auxiliar para determinar el color según el valor de ahorro
   const savingsColor = tracking?.savings < 0 ? 'text-[#EF4444]' : 'text-[#16A34A]';
+  let trendStyle = 'bg-gray-100 text-[#6B7280]';
+  let trendLabel = 'Sin cambio';
+
+  if (tracking?.trend === 'down') {
+    trendStyle = 'bg-green-50 text-[#16A34A]';
+    trendLabel = 'Bajó';
+  } else if (tracking?.trend === 'up') {
+    trendStyle = 'bg-red-50 text-[#EF4444]';
+    trendLabel = 'Subió';
+  }
 
   return (
     <div className="flex h-full w-full flex-col bg-white font-sans text-[#20212A]">
@@ -87,10 +97,8 @@ function PriceTrackingPage({ trackingId, onBack, onCheckout, onClose }) { // Se 
                   <p className="mt-1 text-xl font-bold leading-tight text-[#20212A]">{tracking.productName}</p>
                 </div>
 
-                <div className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
-                  tracking.trend === 'down' ? 'bg-green-50 text-[#16A34A]' : 'bg-red-50 text-[#EF4444]'
-                }`}>
-                  {tracking.trend === 'down' ? 'Bajó' : 'Subió'} {tracking.change}
+                <div className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${trendStyle}`}>
+                  {trendLabel} {tracking.change}
                 </div>
               </div>
             </div>

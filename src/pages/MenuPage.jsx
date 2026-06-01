@@ -1,14 +1,75 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ProductPage from './ProductPage.jsx';
 import CheckoutPage from './CheckoutPage.jsx';
 import PriceTrackingPage from './PriceTrackingPage.jsx';
 import CreditPage from './CreditPage.jsx';
 import IdentityVerificationPage from './IdentityVerificationPage.jsx';
 import TopBar from '../components/TopBar.jsx';
-import { getDashboard, sendTestPriceAlertEmail } from '../api.js';
+import CurrentPageProductCard from '../components/CurrentPageProductCard.jsx';
+import { createPriceTracking, getDashboard, sendTestPriceAlertEmail } from '../api.js';
 import SuccessPage from './SuccessPage.jsx';
 import ErrorPage from './ErrorPage.jsx';
 import { useNotifications } from '../components/useNotifications.js';
+
+function parsePagePrice(price) {
+  const value = Number(String(price || '').replace(/[^0-9.-]+/g, ''));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function normalizeProductUrl(value) {
+  const rawValue = String(value || '').trim();
+  if (!rawValue) return '';
+
+  try {
+    const url = new URL(rawValue);
+    url.hash = '';
+    url.search = '';
+    return url.toString();
+  } catch {
+    return '';
+  }
+}
+
+function findTrackedProductForPageProduct(pageProduct, trackedProducts) {
+  if (!pageProduct) return null;
+
+  const pageProductUrl = normalizeProductUrl(pageProduct.productUrl);
+  if (pageProductUrl) {
+    const urlMatch = trackedProducts.find((product) => (
+      normalizeProductUrl(product.productUrl) === pageProductUrl
+    ));
+
+    if (urlMatch) return urlMatch;
+  }
+
+  const pageProductName = pageProduct.name.trim().toLowerCase();
+  return trackedProducts.find((product) => product.name.trim().toLowerCase() === pageProductName) || null;
+}
+
+function upsertTrackedProduct(products, nextProduct) {
+  return [
+    nextProduct,
+    ...products.filter((product) => product.id !== nextProduct.id),
+  ];
+}
+
+function getTrackingTrendBorder(trend) {
+  if (trend === 'down') return 'border-[#5FCB71]/70';
+  if (trend === 'up') return 'border-[#EF4444]/40';
+  return 'border-[#D1D5DB]/80';
+}
+
+function getTrackingTrendBadge(trend) {
+  if (trend === 'down') return 'bg-green-50 text-[#16A34A]';
+  if (trend === 'up') return 'bg-red-50 text-[#EF4444]';
+  return 'bg-gray-100 text-[#6B7280]';
+}
+
+function getTrackingTrendLabel(trend) {
+  if (trend === 'down') return 'Precio a la baja';
+  if (trend === 'up') return 'Precio al alza';
+  return 'Sin cambio';
+}
 
 // 1. Recibimos onClose desde las props
 function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
@@ -27,7 +88,12 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
   const [dashboard, setDashboard] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [pageProduct, setPageProduct] = useState(null);
+  const [isDetectingPageProduct, setIsDetectingPageProduct] = useState(false);
+  const [pageProductError, setPageProductError] = useState('');
+  const [isTrackingPageProduct, setIsTrackingPageProduct] = useState(false);
   const hasShownDashboardToast = useRef(false);
+  const hasDetectedPageProduct = useRef(false);
 
   // Ya no necesitamos definir handleCloseWidget aquí adentro
   // porque usaremos la prop 'onClose'
@@ -73,6 +139,7 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
   const trackedProducts = dashboard?.trackedProducts || [];
   const notificationPreferences = currentUser?.priceNotificationPreferences || {};
   const [checkoutProduct, setCheckoutProduct] = useState(null);
+  const pageProductTracking = findTrackedProductForPageProduct(pageProduct, trackedProducts);
 
   const preferenceLabels = [
     notificationPreferences.browser ? 'Navegador' : null,
@@ -106,9 +173,136 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
   };
   const verificationStatus = verificationStatusByLevel[verificationLevel] || verificationStatusByLevel.none;
 
-  const handleGoToCheckout = () => {
-    if (!trackedProducts.length) {
-      notifyWarning('No tienes productos en seguimiento para continuar al checkout.', { title: 'Sin productos' });
+  const getSelectedTrackedProduct = () => (
+    trackedProducts.find((product) => product.id === selectedTrackingId) || trackedProducts[0] || {}
+  );
+
+  const readCurrentPageProduct = useCallback(({ silent = false } = {}) => {
+    setIsDetectingPageProduct(true);
+    setPageProductError('');
+
+    if (typeof chrome === 'undefined' || !chrome.tabs) {
+      const message = 'Abre el widget como extensión para detectar la pestaña activa.';
+      setPageProduct(null);
+      setPageProductError(message);
+      setIsDetectingPageProduct(false);
+      if (!silent) notifyWarning(message, { title: 'No disponible' });
+      return;
+    }
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const activeTab = tabs?.[0];
+
+      if (!activeTab?.id) {
+        const message = 'No encontramos una pestaña activa para leer el producto.';
+        setPageProduct(null);
+        setPageProductError(message);
+        setIsDetectingPageProduct(false);
+        if (!silent) notifyWarning(message, { title: 'Pestaña no disponible' });
+        return;
+      }
+
+      const handleProductResponse = (response) => {
+        const currentPrice = parsePagePrice(response?.price);
+        const productName = String(response?.name || '').trim();
+        const productUrl = normalizeProductUrl(response?.productUrl || response?.url || activeTab.url);
+        const storeName = String(response?.storeName || '').trim();
+
+        if (!productName || !currentPrice || !productUrl) {
+          const message = 'No detectamos nombre y precio en esta página.';
+          setPageProduct(null);
+          setPageProductError(message);
+          setIsDetectingPageProduct(false);
+          if (!silent) notifyWarning(message, { title: 'Producto incompleto' });
+          return;
+        }
+
+        setPageProduct({
+          name: productName,
+          price: response?.price || `$${currentPrice.toFixed(2)}`,
+          currentPrice,
+          productUrl,
+          storeName,
+        });
+        setPageProductError('');
+        setIsDetectingPageProduct(false);
+      };
+
+      const handleMessageFailure = () => {
+        const message = 'No se pudo leer producto en la pestaña activa.';
+        setPageProduct(null);
+        setPageProductError(message);
+        setIsDetectingPageProduct(false);
+        if (!silent) notifyWarning(message, { title: 'Producto no detectado' });
+      };
+
+      const sendProductMessage = () => {
+        chrome.tabs.sendMessage(
+          activeTab.id,
+          { action: 'GET_PAGE_PRODUCT' },
+          (response) => {
+            if (chrome.runtime?.lastError) {
+              if (!chrome.scripting?.executeScript) {
+                handleMessageFailure();
+                return;
+              }
+
+              chrome.scripting.executeScript(
+                {
+                  target: { tabId: activeTab.id },
+                  files: ['assets/content.js'],
+                },
+                () => {
+                  if (chrome.runtime?.lastError) {
+                    handleMessageFailure();
+                    return;
+                  }
+
+                  chrome.tabs.sendMessage(
+                    activeTab.id,
+                    { action: 'GET_PAGE_PRODUCT' },
+                    (retryResponse) => {
+                      if (chrome.runtime?.lastError) {
+                        handleMessageFailure();
+                        return;
+                      }
+
+                      handleProductResponse(retryResponse);
+                    }
+                  );
+                }
+              );
+              return;
+            }
+
+            handleProductResponse(response);
+          }
+        );
+      };
+
+      sendProductMessage();
+    });
+  }, [notifyWarning]);
+
+  useEffect(() => {
+    if (hasDetectedPageProduct.current) {
+      return;
+    }
+
+    hasDetectedPageProduct.current = true;
+    readCurrentPageProduct({ silent: true });
+  }, [readCurrentPageProduct]);
+
+  const handleGoToCheckout = ({ useTrackedProduct = false } = {}) => {
+    if (useTrackedProduct) {
+      if (!trackedProducts.length) {
+        notifyWarning('No tienes productos en seguimiento para continuar al checkout.', { title: 'Sin productos' });
+        return;
+      }
+
+      setCheckoutProduct(getSelectedTrackedProduct());
+      setCapturedPrice('');
+      setScreen('checkout');
       return;
     }
 
@@ -123,7 +317,7 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
           tabs[0].id,
           { action: 'GET_PRODUCT_PRICE' },
           (response) => {
-            const baseProduct = trackedProducts.find((p) => p.id === selectedTrackingId) || trackedProducts[0] || {};
+            const baseProduct = getSelectedTrackedProduct();
             const productData = {
               ...baseProduct,
               name: response?.name || baseProduct.name || "Producto de Amazon",
@@ -137,10 +331,50 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
       });
       return;
     }
-    const fallbackProduct = trackedProducts.find((p) => p.id === selectedTrackingId) || trackedProducts[0] || {};
+
+    const fallbackProduct = pageProduct || getSelectedTrackedProduct();
+    if (!fallbackProduct?.name) {
+      notifyWarning('No encontramos un producto para continuar al checkout.', { title: 'Sin producto' });
+      return;
+    }
+
     setCheckoutProduct(fallbackProduct);
     setCapturedPrice(fallbackProduct?.price || '$1,234.56');
     setScreen('checkout');
+  };
+
+  const handleTrackPageProduct = async () => {
+    if (!pageProduct) return;
+
+    setIsTrackingPageProduct(true);
+
+    try {
+      const data = await createPriceTracking(currentUser.id, {
+        productName: pageProduct.name,
+        currentPrice: pageProduct.currentPrice,
+        productUrl: pageProduct.productUrl,
+        storeName: pageProduct.storeName,
+      });
+
+      setDashboard((previous) => (
+        previous
+          ? {
+              ...previous,
+              trackedProducts: upsertTrackedProduct(previous.trackedProducts || [], data.tracking),
+            }
+          : previous
+      ));
+      setSelectedTrackingId(data.tracking.id);
+
+      notifySuccess(
+        data.alreadyTracked ? 'Este producto ya estaba en seguimiento.' : 'Producto agregado a seguimiento.',
+        { title: 'Seguimiento de precios' },
+      );
+    } catch (apiError) {
+      notifyError(apiError.message, { title: 'No se pudo seguir el producto' });
+    } finally {
+      setIsTrackingPageProduct(false);
+    }
   };
 
   const handleLogout = () => {
@@ -289,7 +523,7 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
       <PriceTrackingPage
         trackingId={selectedTrackingId}
         onBack={() => setScreen('home')}
-        onCheckout={handleGoToCheckout}
+        onCheckout={() => handleGoToCheckout({ useTrackedProduct: true })}
         onClose={onClose}
       />
     );
@@ -387,6 +621,21 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
           </div>
         </section>
 
+        <CurrentPageProductCard
+          product={pageProduct}
+          trackedProduct={pageProductTracking}
+          isLoading={isDetectingPageProduct}
+          error={pageProductError}
+          onRefresh={() => readCurrentPageProduct()}
+          onTrack={handleTrackPageProduct}
+          isTracking={isTrackingPageProduct}
+          onOpenTracking={() => {
+            if (!pageProductTracking) return;
+            setSelectedTrackingId(pageProductTracking.id);
+            setScreen('tracking');
+          }}
+        />
+
         <section className="mt-4 rounded-3xl border border-[#D1D5DB]/80 bg-white p-5 shadow-[0_10px_26px_rgba(32,33,42,0.06)]">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -449,12 +698,12 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
               <button
                 key={product.id}
                 onClick={() => { setSelectedTrackingId(product.id); setScreen('tracking'); }}
-                className={`w-full rounded-3xl border bg-white p-4 text-left shadow-[0_8px_22px_rgba(32,33,42,0.05)] transition-all hover:bg-[#F8FAFF] active:scale-[0.99] ${product.trend === 'down' ? 'border-[#5FCB71]/70' : 'border-[#EF4444]/40'}`}
+                className={`w-full rounded-3xl border bg-white p-4 text-left shadow-[0_8px_22px_rgba(32,33,42,0.05)] transition-all hover:bg-[#F8FAFF] active:scale-[0.99] ${getTrackingTrendBorder(product.trend)}`}
               >
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <div className={`mb-2 inline-flex rounded-full px-3 py-1 text-xs font-bold ${product.trend === 'down' ? 'bg-green-50 text-[#16A34A]' : 'bg-red-50 text-[#EF4444]'}`}>
-                      {product.trend === 'down' ? 'Precio a la baja' : 'Precio al alza'}
+                    <div className={`mb-2 inline-flex rounded-full px-3 py-1 text-xs font-bold ${getTrackingTrendBadge(product.trend)}`}>
+                      {getTrackingTrendLabel(product.trend)}
                     </div>
                     <h3 className="font-bold text-[#20212A]">{product.name}</h3>
                     <p className="mt-2 text-lg font-bold text-[#20212A]">{product.price}</p>

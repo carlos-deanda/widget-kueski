@@ -63,9 +63,17 @@ CREATE TABLE IF NOT EXISTS products (
   description TEXT,
   image_url TEXT,
   store_name TEXT,
+  product_url TEXT,
   current_price NUMERIC(10, 2) NOT NULL,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS product_url TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS products_product_url_unique
+  ON products (product_url)
+  WHERE product_url IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS purchases (
   id SERIAL PRIMARY KEY,
@@ -102,6 +110,9 @@ CREATE TABLE IF NOT EXISTS price_trackings (
 
 ALTER TABLE price_trackings
   DROP COLUMN IF EXISTS target_price;
+
+CREATE UNIQUE INDEX IF NOT EXISTS price_trackings_user_product_unique
+  ON price_trackings (user_id, product_id);
 
 CREATE TABLE IF NOT EXISTS price_history (
   id SERIAL PRIMARY KEY,

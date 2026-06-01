@@ -9,6 +9,13 @@ const cors = require('cors');
 const { Pool } = require('pg');
 const { google } = require('googleapis');
 const { sendPriceDropEmail } = require('./services/emailService');
+const {
+  hasEmailTransport,
+  buildPriceDropEmail,
+  buildTestEmail,
+  sendEmail,
+} = require('./services/emailAlerts');
+const { sendPriceDropEmailAlerts } = require('./services/priceAlerts');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -30,6 +37,26 @@ const emailAlertIntervalMinutes = Number(process.env.PRICE_ALERT_EMAIL_INTERVAL_
 const emailAlertsEnabled = String(process.env.ENABLE_PRICE_ALERT_EMAILS || '').toLowerCase() === 'true';
 let emailAlertIntervalId = null;
 
+function quoteIdentifier(value) {
+  return `"${String(value).replace(/"/g, '""')}"`;
+}
+
+async function resetSerialSequence(tableName, columnName = 'id') {
+  const tableIdentifier = quoteIdentifier(tableName);
+  const columnIdentifier = quoteIdentifier(columnName);
+
+  await pool.query(
+    `
+      SELECT setval(
+        pg_get_serial_sequence($1, $2),
+        COALESCE((SELECT MAX(${columnIdentifier}) FROM ${tableIdentifier}), 1),
+        (SELECT COUNT(*) FROM ${tableIdentifier}) > 0
+      )
+    `,
+    [tableName, columnName]
+  );
+}
+
 async function ensureDatabaseSchema() {
   await pool.query(`
     ALTER TABLE users
@@ -37,12 +64,33 @@ async function ensureDatabaseSchema() {
       ADD COLUMN IF NOT EXISTS price_notify_email BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS price_notify_google_calendar BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS price_notification_preferences_set BOOLEAN NOT NULL DEFAULT FALSE,
+<<<<<<< HEAD
       ADD COLUMN IF NOT EXISTS google_refresh_token TEXT,
       ADD COLUMN IF NOT EXISTS verification_level TEXT NOT NULL DEFAULT 'none' CHECK (verification_level IN ('none', 'partial', 'full')),
       ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS phone_verification_code TEXT,
       ADD COLUMN IF NOT EXISTS phone_verification_expires_at TIMESTAMP;
+=======
+      ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;
+
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS product_url TEXT;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS products_product_url_unique
+      ON products (product_url)
+      WHERE product_url IS NOT NULL;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS price_trackings_user_product_unique
+      ON price_trackings (user_id, product_id);
+>>>>>>> feature/trackedProducts
   `);
+
+  await Promise.all([
+    resetSerialSequence('users'),
+    resetSerialSequence('products'),
+    resetSerialSequence('purchases'),
+    resetSerialSequence('price_trackings'),
+  ]);
 }
 
 const USER_SELECT_FIELDS = `
@@ -329,8 +377,54 @@ function money(value) {
   return Number(value || 0);
 }
 
+<<<<<<< HEAD
 function generateVerificationCode() {
   return String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
+=======
+function parseMoneyInput(value) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  const numericValue = Number(String(value || '').replace(/[^0-9.-]+/g, ''));
+  return Number.isFinite(numericValue) ? numericValue : 0;
+}
+
+function normalizeProductUrl(value) {
+  const rawValue = String(value || '').trim();
+  if (!rawValue) {
+    return '';
+  }
+
+  try {
+    const parsedUrl = new URL(rawValue);
+    parsedUrl.hash = '';
+    parsedUrl.search = '';
+    return parsedUrl.toString();
+  } catch {
+    return '';
+  }
+}
+
+function normalizePriceTrackingProduct(source) {
+  const productUrl = normalizeProductUrl(source.productUrl || source.url);
+  let storeName = String(source.storeName || '').trim().slice(0, 120);
+
+  if (!storeName && productUrl) {
+    try {
+      storeName = new URL(productUrl).hostname.replace(/^www\./, '');
+    } catch {
+      storeName = '';
+    }
+  }
+
+  return {
+    productName: String(source.productName || source.name || '').trim().slice(0, 160),
+    currentPrice: parseMoneyInput(source.currentPrice ?? source.price),
+    productUrl,
+    storeName,
+  };
+>>>>>>> feature/trackedProducts
 }
 
 function getGoogleOAuthClient() {
@@ -485,23 +579,63 @@ function formatDashboardPurchase(row) {
   };
 }
 
+function getPriceTrend(hasPreviousPrice, changeAmount) {
+  if (!hasPreviousPrice || changeAmount === 0) {
+    return 'flat';
+  }
+
+  return changeAmount < 0 ? 'down' : 'up';
+}
+
 function formatTrackedProduct(row) {
   const currentPrice = money(row.current_price);
-  const previousPrice = money(row.previous_price || row.current_price);
+  const hasPreviousPrice = row.previous_price !== null && row.previous_price !== undefined;
+  const previousPrice = hasPreviousPrice ? money(row.previous_price) : currentPrice;
   const changeAmount = currentPrice - previousPrice;
   const change = previousPrice === 0 ? 0 : Math.abs((changeAmount / previousPrice) * 100);
 
   return {
     id: row.id,
     productId: row.product_id,
+    productUrl: row.product_url,
     name: row.name,
     price: `$${currentPrice.toFixed(2)}`,
     currentPrice,
     change: `${change.toFixed(1)}%`,
-    trend: changeAmount <= 0 ? 'down' : 'up',
+    trend: getPriceTrend(hasPreviousPrice, changeAmount),
     badge: changeAmount < 0 ? 'Good Deal' : null,
     isActive: row.is_active,
   };
+}
+
+async function getTrackedProductById(client, userId, trackingId) {
+  const result = await client.query(
+    `
+      WITH latest_prices AS (
+        SELECT
+          ph.product_id,
+          ph.price,
+          LAG(ph.price) OVER (PARTITION BY ph.product_id ORDER BY ph.recorded_at) AS previous_price,
+          ROW_NUMBER() OVER (PARTITION BY ph.product_id ORDER BY ph.recorded_at DESC) AS rn
+        FROM price_history ph
+      )
+      SELECT
+        pt.id,
+        pt.product_id,
+        pr.name,
+        pr.current_price,
+        pr.product_url,
+        pt.is_active,
+        latest_prices.previous_price
+      FROM price_trackings pt
+      JOIN products pr ON pr.id = pt.product_id
+      LEFT JOIN latest_prices ON latest_prices.product_id = pr.id AND latest_prices.rn = 1
+      WHERE pt.user_id = $1 AND pt.id = $2
+    `,
+    [userId, trackingId]
+  );
+
+  return result.rowCount > 0 ? formatTrackedProduct(result.rows[0]) : null;
 }
 
 app.use(cors({
@@ -631,6 +765,7 @@ app.get('/api/users/:userId/dashboard', async (req, res) => {
             pt.product_id,
             pr.name,
             pr.current_price,
+            pr.product_url,
             pt.is_active,
             latest_prices.previous_price
           FROM price_trackings pt
@@ -658,6 +793,7 @@ app.get('/api/users/:userId/dashboard', async (req, res) => {
   }
 });
 
+<<<<<<< HEAD
 app.post('/api/users/:userId/phone-verification/start', async (req, res) => {
   const { userId } = req.params;
   const code = generateVerificationCode();
@@ -710,10 +846,30 @@ app.post('/api/users/:userId/phone-verification/verify', async (req, res) => {
     );
 
     if (userResult.rowCount === 0) {
+=======
+app.post('/api/users/:userId/price-trackings', async (req, res) => {
+  const { userId } = req.params;
+  const normalized = normalizePriceTrackingProduct(req.body);
+
+  if (!normalized.productName || !normalized.currentPrice || !normalized.productUrl) {
+    res.status(400).json({ error: 'productName, currentPrice and productUrl are required' });
+    return;
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const userResult = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (userResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+>>>>>>> feature/trackedProducts
       res.status(404).json({ error: 'User not found' });
       return;
     }
 
+<<<<<<< HEAD
     const user = userResult.rows[0];
     const expiresAt = user.phone_verification_expires_at
       ? new Date(user.phone_verification_expires_at).getTime()
@@ -749,6 +905,81 @@ app.post('/api/users/:userId/phone-verification/verify', async (req, res) => {
     res.json({ user: mapUser(result.rows[0]) });
   } catch (error) {
     res.status(500).json({ error: error.message });
+=======
+    const productResult = await client.query(
+      `
+        INSERT INTO products (name, store_name, current_price, product_url)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (product_url) WHERE product_url IS NOT NULL
+        DO UPDATE SET
+          name = EXCLUDED.name,
+          store_name = COALESCE(EXCLUDED.store_name, products.store_name),
+          current_price = EXCLUDED.current_price
+        RETURNING id
+      `,
+      [
+        normalized.productName,
+        normalized.storeName || null,
+        normalized.currentPrice,
+        normalized.productUrl,
+      ]
+    );
+
+    const productId = productResult.rows[0].id;
+    const existingTracking = await client.query(
+      `
+        SELECT id, is_active
+        FROM price_trackings
+        WHERE user_id = $1 AND product_id = $2
+      `,
+      [userId, productId]
+    );
+
+    const latestHistory = await client.query(
+      `
+        SELECT price
+        FROM price_history
+        WHERE product_id = $1
+        ORDER BY recorded_at DESC
+        LIMIT 1
+      `,
+      [productId]
+    );
+
+    if (latestHistory.rowCount === 0 || money(latestHistory.rows[0].price) !== normalized.currentPrice) {
+      await client.query(
+        'INSERT INTO price_history (product_id, price) VALUES ($1, $2)',
+        [productId, normalized.currentPrice]
+      );
+    }
+
+    const trackingResult = await client.query(
+      `
+        INSERT INTO price_trackings (user_id, product_id, is_active)
+        VALUES ($1, $2, TRUE)
+        ON CONFLICT (user_id, product_id)
+        DO UPDATE SET is_active = TRUE
+        RETURNING id
+      `,
+      [userId, productId]
+    );
+
+    const tracking = await getTrackedProductById(client, userId, trackingResult.rows[0].id);
+    const alreadyTracked = existingTracking.rowCount > 0 && existingTracking.rows[0].is_active === true;
+
+    await client.query('COMMIT');
+
+    res.status(alreadyTracked ? 200 : 201).json({
+      tracking,
+      alreadyTracked,
+      reactivated: existingTracking.rowCount > 0 && !alreadyTracked,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+>>>>>>> feature/trackedProducts
   }
 });
 
@@ -1513,6 +1744,7 @@ app.get('/api/price-trackings/:trackingId', async (req, res) => {
           pt.is_active,
           pr.name,
           pr.current_price,
+          pr.product_url,
           price_stats.historical_low,
           first_prices.first_seen_price,
           latest_prices.previous_price
@@ -1534,7 +1766,8 @@ app.get('/api/price-trackings/:trackingId', async (req, res) => {
     const row = tracking.rows[0];
     const currentPrice = money(row.current_price);
     const firstSeenPrice = money(row.first_seen_price || row.current_price);
-    const previousPrice = money(row.previous_price || row.current_price);
+    const hasPreviousPrice = row.previous_price !== null && row.previous_price !== undefined;
+    const previousPrice = hasPreviousPrice ? money(row.previous_price) : currentPrice;
     const changeAmount = currentPrice - previousPrice;
     const changePercent = previousPrice === 0 ? 0 : Math.abs((changeAmount / previousPrice) * 100);
 
@@ -1542,12 +1775,13 @@ app.get('/api/price-trackings/:trackingId', async (req, res) => {
       tracking: {
         id: row.id,
         productName: row.name,
+        productUrl: row.product_url,
         currentPrice,
         firstSeenPrice,
         historicalLow: money(row.historical_low || row.current_price),
         savings: firstSeenPrice - currentPrice,
         change: `${changePercent.toFixed(1)}%`,
-        trend: changeAmount <= 0 ? 'down' : 'up',
+        trend: getPriceTrend(hasPreviousPrice, changeAmount),
         isActive: row.is_active,
       },
     });
