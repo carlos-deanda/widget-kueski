@@ -10,6 +10,20 @@ function LoginPage({ onLogin, onClose }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const handleForgotPassword = () => {
+    window.open(
+      'https://accounts.kueski.com/u/reset-password/request/Username-Password-Authentication?state=hKFo2SBVcEpzc3VDZnhnUWc3M0xKaW91V3VJVVBsZzV0MDA3VKFurnJlc2V0LXBhc3N3b3Jko3RpZNkgOGxXaHdvTGtORGVMQ3JxemI2aTI2aVoyY2JBanpYSnmjY2lk2SBuSmJiem9Ka2pEMGxJOFFEWHIzNm1hQlRPSWk2ZVF6TQ',
+      '_blank',
+      'noopener,noreferrer',
+    );
+  };
+  const handleCreateAccount = () => {
+    window.open(
+      'https://accounts.kueski.com/u/signup?state=hKFo2SA0R2dGQ1c3R0hGRnZaRjZuaURBVF9ZX3JlREM0dzZVcKFur3VuaXZlcnNhbC1sb2dpbqN0aWTZIFJwRW1WVGNsRzlWdkZRTlpmQTVISF85b2JISWFxU29Go2NpZNkgbkpiYnpvSmtqRDBsSThRRFhyMzZtYUJUT0lpNmVRek0',
+      '_blank',
+      'noopener,noreferrer',
+    );
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -101,7 +115,13 @@ function LoginPage({ onLogin, onClose }) {
           </label>
 
           <div className="flex justify-end">
-            <span className="text-sm font-semibold text-[#4B73F8]">¿Olvidaste tu contraseña?</span>
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              className="cursor-pointer text-sm font-semibold text-[#4B73F8] transition-colors hover:text-[#345ee8]"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
           </div>
 
           { /*
@@ -136,8 +156,8 @@ function LoginPage({ onLogin, onClose }) {
             <span>¿Aún no tienes cuenta?</span>{' '}
             <button
               type="button"
-              disabled
-              className="font-bold text-[#4B73F8] disabled:cursor-default disabled:opacity-100"
+              onClick={handleCreateAccount}
+              className="cursor-pointer font-bold text-[#4B73F8] transition-colors hover:text-[#345ee8]"
             >
               Crear una cuenta
             </button>
