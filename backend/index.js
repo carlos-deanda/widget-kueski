@@ -279,11 +279,15 @@ async function openIcsInAppleCalendar(ics, purchaseId) {
 function mapUser(row) {
   const identidadVerificada = row.identidad_verificada === true;
   const storedVerificationLevel = row.verification_level || 'none';
-  const verificationLevel = identidadVerificada
-    ? 'full'
-    : row.phone_verified === true && storedVerificationLevel === 'none'
-      ? 'partial'
-      : storedVerificationLevel;
+  let verificationLevel = storedVerificationLevel;
+
+  if (identidadVerificada) {
+    verificationLevel = 'full';
+  } else if (verificationLevel === 'full') {
+    verificationLevel = row.phone_verified === true ? 'partial' : 'none';
+  } else if (row.phone_verified === true && verificationLevel === 'none') {
+    verificationLevel = 'partial';
+  }
 
   return {
     id: row.id,
