@@ -1943,6 +1943,54 @@ function cleanSearchQuery(q) {
   return clean;
 }
 
+function isAccessoryMismatch(queryText, resultText) {
+  const accessoryWords = [
+    'funda', 'case', 'cover', 'estuche', 'carcasa', 'silicon', 'silicona',
+    'protector', 'mica', 'cristal templado', 'vidrio templado', 'screen protector',
+    'cable', 'cargador', 'adaptador', 'charger',
+    'base', 'soporte', 'stand', 'mount',
+    'calcomania', 'skin', 'sticker', 'adhesivo',
+    'correa', 'pulsera', 'strap', 'band'
+  ];
+
+  const queryLower = queryText.toLowerCase();
+  const resultLower = resultText.toLowerCase();
+
+  for (const word of accessoryWords) {
+    if (resultLower.includes(word) && !queryLower.includes(word)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getSimilarityScore(str1, str2) {
+  const getTokens = (str) => {
+    return str
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[.,#!$%^&*;:{}=\-_`~()[\]]/g, " ")
+      .replace(/\//g, " ")
+      .split(/\s+/)
+      .filter(w => w.length > 2);
+  };
+
+  const tokens1 = getTokens(str1);
+  const tokens2 = getTokens(str2);
+
+  if (tokens1.length === 0) return 0;
+
+  let matches = 0;
+  for (const token of tokens1) {
+    if (tokens2.includes(token)) {
+      matches++;
+    }
+  }
+
+  return matches / tokens1.length;
+}
+
 app.get('/api/external/search', async (req, res) => {
   const { q } = req.query;
   if (!q) {
@@ -1964,7 +2012,14 @@ app.get('/api/external/search', async (req, res) => {
     if (mlResponse.ok) {
       const data = await mlResponse.json();
       if (data.results && data.results.length > 0) {
-        const result = data.results.find(r => r.price && Number(r.price) > 0);
+        const result = data.results.find(r => {
+          const price = Number(r.price);
+          if (!price || price <= 0) return false;
+          if (isAccessoryMismatch(searchQuery, r.title)) return false;
+          if (getSimilarityScore(searchQuery, r.title) < 0.5) return false;
+          return true;
+        });
+
         if (result) {
           results.push({
             store: 'Mercado Libre',
@@ -1993,6 +2048,9 @@ app.get('/api/external/search', async (req, res) => {
       const data = await elResponse.json();
       if (data && data.length > 0) {
         for (const product of data) {
+          if (isAccessoryMismatch(searchQuery, product.productName)) continue;
+          if (getSimilarityScore(searchQuery, product.productName) < 0.5) continue;
+
           let price = null;
           if (product.items) {
             for (const item of product.items) {
