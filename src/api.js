@@ -125,6 +125,12 @@ export function createPriceTracking(userId, payload) {
   });
 }
 
+export function deletePriceTracking(userId, trackingId) {
+  return request(`/api/users/${userId}/price-trackings/${trackingId}`, {
+    method: 'DELETE',
+  });
+}
+
 export function getGoogleCalendarStartUrl(purchaseId) {
   return `${API_BASE_URL}/api/purchases/${purchaseId}/calendar/google/start`;
 }

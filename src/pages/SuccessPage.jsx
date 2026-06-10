@@ -134,7 +134,7 @@ function formatExpiration(timestamp) {
   });
 }
 
-export default function SuccessPage({ onBack, onClose, storeDetection }) {
+export default function SuccessPage({ onBack, onClose, storeDetection, purchaseStoreDetection }) {
   const [card, setCard] = useState(() => getStoredCard());
   const [verification, setVerification] = useState(() => getStoredVerification());
   const [isVerifying, setIsVerifying] = useState(false);
@@ -142,7 +142,17 @@ export default function SuccessPage({ onBack, onClose, storeDetection }) {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [now, setNow] = useState(() => Date.now());
 
-  const isAffiliateStore = Boolean(storeDetection?.esTiendaAfiliada);
+  // La tienda que manda es la del producto comprado; la página actual solo
+  // sirve para avisar al usuario si está en otra tienda.
+  const productStore = purchaseStoreDetection || storeDetection;
+  const isAffiliateStore = Boolean(productStore?.esTiendaAfiliada);
+  const productStoreLabel = productStore?.tiendaAfiliada?.nombre || productStore?.hostname || 'la tienda del producto';
+  const currentPageTienda = storeDetection?.tiendaAfiliada || null;
+  const isOnDifferentPage = Boolean(
+    productStore?.hostname
+      && storeDetection?.hostname
+      && productStore.hostname !== storeDetection.hostname,
+  );
   const lockUntil = Number(verification.lockUntil || 0);
   const isLocked = lockUntil > now;
   const lockRemaining = Math.max(0, lockUntil - now);
@@ -326,14 +336,36 @@ export default function SuccessPage({ onBack, onClose, storeDetection }) {
   );
 
   const renderStoreNotice = () => {
-    const noticeClass = isAffiliateStore
-      ? 'mb-5 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm font-medium leading-relaxed text-[#16A34A]'
-      : 'mb-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-medium leading-relaxed text-[#4B73F8]';
-    const noticeText = isAffiliateStore
-      ? 'Esta tienda acepta Kueski Pay directamente. Selecciona Kueski Pay al pagar — no necesitas tarjeta.'
-      : 'Esta tienda no acepta Kueski Pay directamente. Puedes generar una tarjeta digital para pagar tu compra.';
+    if (isAffiliateStore) {
+      const affiliateText = isOnDifferentPage
+        ? `${productStoreLabel} acepta Kueski Pay directamente. Ve a la página del producto y selecciona Kueski Pay al pagar — no necesitas tarjeta.`
+        : `${productStoreLabel} acepta Kueski Pay directamente. Selecciona Kueski Pay al pagar — no necesitas tarjeta.`;
 
-    return <p className={noticeClass}>{noticeText}</p>;
+      return (
+        <p className="mb-5 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm font-medium leading-relaxed text-[#16A34A]">
+          {affiliateText}
+        </p>
+      );
+    }
+
+    const cardScopeWarning = isOnDifferentPage
+      ? (currentPageTienda
+        ? `La tarjeta solo es válida en la página del producto (${productStoreLabel}), no en ${currentPageTienda.nombre}, porque es tienda afiliada y ahí pagas directo con Kueski Pay.`
+        : `La tarjeta solo es válida en la página del producto (${productStoreLabel}).`)
+      : '';
+
+    return (
+      <>
+        <p className="mb-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-medium leading-relaxed text-[#4B73F8]">
+          {`La tienda de este producto (${productStoreLabel}) no acepta Kueski Pay directamente. Puedes generar una tarjeta digital para pagar tu compra.`}
+        </p>
+        {cardScopeWarning && (
+          <p className="mb-5 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-medium leading-relaxed text-[#D97706]">
+            {cardScopeWarning}
+          </p>
+        )}
+      </>
+    );
   };
 
   const renderAffiliatedStore = () => (

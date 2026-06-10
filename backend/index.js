@@ -979,6 +979,26 @@ app.post('/api/users/:userId/price-trackings', async (req, res) => {
   }
 });
 
+app.delete('/api/users/:userId/price-trackings/:trackingId', async (req, res) => {
+  const { userId, trackingId } = req.params;
+
+  try {
+    const result = await pool.query(
+      'DELETE FROM price_trackings WHERE user_id = $1 AND id = $2 RETURNING id',
+      [userId, trackingId]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'Seguimiento no encontrado' });
+      return;
+    }
+
+    res.json({ ok: true, deletedTrackingId: result.rows[0].id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Recibe precios re-verificados (scraping del background de la extensión)
 // y los registra en products + price_history. Las alertas (browser, Resend,
 // Calendar) las dispara el background al comparar contra su snapshot.

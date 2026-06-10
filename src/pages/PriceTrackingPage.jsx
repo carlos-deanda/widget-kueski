@@ -2,10 +2,21 @@ import { useEffect, useState } from 'react';
 import TopBar from '../components/TopBar.jsx';
 import { getPriceTracking } from '../api.js';
 
-function PriceTrackingPage({ trackingId, onBack, onCheckout, onClose }) { // Se añade onClose a las props
+function PriceTrackingPage({ trackingId, onBack, onCheckout, onDelete, onClose }) { // Se añade onClose a las props
   const [tracking, setTracking] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+
+    try {
+      await onDelete();
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -170,6 +181,17 @@ function PriceTrackingPage({ trackingId, onBack, onCheckout, onClose }) { // Se 
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M14 5l7 7m0 0-7 7m7-7H3" />
               </svg>
+            </button>
+
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-red-200 bg-red-50 py-3 text-sm font-bold text-[#EF4444] transition-all hover:bg-red-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m19 7-.867 12.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16" />
+              </svg>
+              {isDeleting ? 'Eliminando...' : 'Eliminar seguimiento'}
             </button>
           </div>
         )}

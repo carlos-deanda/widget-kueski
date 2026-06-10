@@ -6,7 +6,8 @@ import CreditPage from './CreditPage.jsx';
 import IdentityVerificationPage from './IdentityVerificationPage.jsx';
 import TopBar from '../components/TopBar.jsx';
 import CurrentPageProductCard from '../components/CurrentPageProductCard.jsx';
-import { createPriceTracking, getDashboard, sendTestPriceAlertEmail } from '../api.js';
+import { createPriceTracking, deletePriceTracking, getDashboard, sendTestPriceAlertEmail } from '../api.js';
+import { obtenerDeteccionTiendaDesdeUrl } from '../config/tiendasAfiliadas.js';
 import SuccessPage from './SuccessPage.jsx';
 import ErrorPage from './ErrorPage.jsx';
 import { useNotifications } from '../components/useNotifications.js';
@@ -92,6 +93,7 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
   const [isDetectingPageProduct, setIsDetectingPageProduct] = useState(false);
   const [pageProductError, setPageProductError] = useState('');
   const [isTrackingPageProduct, setIsTrackingPageProduct] = useState(false);
+  const [deletingTrackingId, setDeletingTrackingId] = useState(null);
   const hasShownDashboardToast = useRef(false);
   const hasDetectedPageProduct = useRef(false);
 
@@ -162,6 +164,9 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
   const trackedProducts = dashboard?.trackedProducts || [];
   const notificationPreferences = currentUser?.priceNotificationPreferences || {};
   const [checkoutProduct, setCheckoutProduct] = useState(null);
+  // Tienda del producto que se está comprando (derivada de su productUrl),
+  // independiente de la página en la que esté el usuario.
+  const [checkoutStoreDetection, setCheckoutStoreDetection] = useState(null);
   const pageProductTracking = findTrackedProductForPageProduct(pageProduct, trackedProducts);
 
   const preferenceLabels = [
@@ -328,6 +333,7 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
     }
 
     setCheckoutProduct(fallbackProduct);
+    setCheckoutStoreDetection(obtenerDeteccionTiendaDesdeUrl(fallbackProduct.productUrl));
     setCapturedPrice(fallbackProduct?.price || '');
     setScreen('checkout');
   };
@@ -345,6 +351,7 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
     };
 
     setCheckoutProduct(productData);
+    setCheckoutStoreDetection(obtenerDeteccionTiendaDesdeUrl(productData.productUrl));
     setCapturedPrice(responsePrice || baseProduct?.price || '');
     setScreen('checkout');
   };
@@ -358,7 +365,9 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
         return;
       }
 
-      setCheckoutProduct(getSelectedTrackedProduct());
+      const trackedProduct = getSelectedTrackedProduct();
+      setCheckoutProduct(trackedProduct);
+      setCheckoutStoreDetection(obtenerDeteccionTiendaDesdeUrl(trackedProduct.productUrl));
       setCapturedPrice('');
       setScreen('checkout');
       return;
@@ -421,6 +430,37 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
       notifyError(apiError.message, { title: 'No se pudo seguir el producto' });
     } finally {
       setIsTrackingPageProduct(false);
+    }
+  };
+
+  const handleDeleteTracking = async (trackingId, { returnHome = false } = {}) => {
+    setDeletingTrackingId(trackingId);
+
+    try {
+      await deletePriceTracking(currentUser.id, trackingId);
+
+      setDashboard((previous) => (
+        previous
+          ? {
+              ...previous,
+              trackedProducts: (previous.trackedProducts || []).filter((product) => product.id !== trackingId),
+            }
+          : previous
+      ));
+
+      if (selectedTrackingId === trackingId) {
+        setSelectedTrackingId(null);
+      }
+
+      notifySuccess('Producto eliminado del seguimiento.', { title: 'Seguimiento de precios' });
+
+      if (returnHome) {
+        setScreen('home');
+      }
+    } catch (apiError) {
+      notifyError(apiError.message, { title: 'No se pudo eliminar el seguimiento' });
+    } finally {
+      setDeletingTrackingId(null);
     }
   };
 
@@ -583,13 +623,21 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
         trackingId={selectedTrackingId}
         onBack={() => setScreen('home')}
         onCheckout={() => handleGoToCheckout({ useTrackedProduct: true })}
+        onDelete={() => handleDeleteTracking(selectedTrackingId, { returnHome: true })}
         onClose={onClose}
       />
     );
   }
 
   if (screen === 'success') {
-    return <SuccessPage onBack={() => setScreen('home')} onClose={onClose} storeDetection={storeDetection} />;
+    return (
+      <SuccessPage
+        onBack={() => setScreen('home')}
+        onClose={onClose}
+        storeDetection={storeDetection}
+        purchaseStoreDetection={checkoutStoreDetection}
+      />
+    );
   }
 
   if (screen === 'error') {
@@ -753,26 +801,56 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
         <section className="mt-7 border-t border-[#D1D5DB]/70 pt-6">
           <h2 className="mb-3 text-xl font-bold text-[#20212A]">Seguimiento de precios</h2>
           <div className="space-y-3">
-            {trackedProducts.map((product) => (
-              <button
-                key={product.id}
-                onClick={() => { setSelectedTrackingId(product.id); setScreen('tracking'); }}
-                className={`w-full rounded-3xl border bg-white p-4 text-left shadow-[0_8px_22px_rgba(32,33,42,0.05)] transition-all hover:bg-[#F8FAFF] active:scale-[0.99] ${getTrackingTrendBorder(product.trend)}`}
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className={`mb-2 inline-flex rounded-full px-3 py-1 text-xs font-bold ${getTrackingTrendBadge(product.trend)}`}>
-                      {getTrackingTrendLabel(product.trend)}
+            {trackedProducts.map((product) => {
+              const openTracking = () => { setSelectedTrackingId(product.id); setScreen('tracking'); };
+              const isDeleting = deletingTrackingId === product.id;
+
+              return (
+                <div
+                  key={product.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={openTracking}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      openTracking();
+                    }
+                  }}
+                  className={`w-full cursor-pointer rounded-3xl border bg-white p-4 text-left shadow-[0_8px_22px_rgba(32,33,42,0.05)] transition-all hover:bg-[#F8FAFF] active:scale-[0.99] ${getTrackingTrendBorder(product.trend)}`}
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <div className={`mb-2 inline-flex rounded-full px-3 py-1 text-xs font-bold ${getTrackingTrendBadge(product.trend)}`}>
+                        {getTrackingTrendLabel(product.trend)}
+                      </div>
+                      <h3 className="font-bold text-[#20212A]">{product.name}</h3>
+                      <p className="mt-2 text-lg font-bold text-[#20212A]">{product.price}</p>
                     </div>
-                    <h3 className="font-bold text-[#20212A]">{product.name}</h3>
-                    <p className="mt-2 text-lg font-bold text-[#20212A]">{product.price}</p>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={isDeleting}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDeleteTracking(product.id);
+                        }}
+                        title="Eliminar seguimiento"
+                        aria-label={`Eliminar seguimiento de ${product.name}`}
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-red-100 bg-red-50 text-[#EF4444] transition-all hover:bg-red-100 active:scale-[0.95] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m19 7-.867 12.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                      <svg className="h-5 w-5 text-[#6B7280]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="m9 5 7 7-7 7" />
+                      </svg>
+                    </div>
                   </div>
-                  <svg className="h-5 w-5 shrink-0 text-[#6B7280]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="m9 5 7 7-7 7" />
-                  </svg>
                 </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
         </section>
       </main>

@@ -11,6 +11,28 @@ export const TIENDAS_AFILIADAS = [
   { nombre: 'Innvictus', dominio: 'innvictus.com' },
 ];
 
+export function obtenerDeteccionTiendaDesdeUrl(url) {
+  let hostname;
+
+  try {
+    hostname = new URL(String(url || '')).hostname;
+  } catch {
+    hostname = '';
+  }
+
+  if (!hostname) {
+    return null;
+  }
+
+  const tiendaAfiliada = obtenerTiendaAfiliada(hostname);
+
+  return {
+    hostname,
+    tiendaAfiliada,
+    esTiendaAfiliada: Boolean(tiendaAfiliada),
+  };
+}
+
 export function obtenerTiendaAfiliada(hostname) {
   if (!hostname) {
     return null;
