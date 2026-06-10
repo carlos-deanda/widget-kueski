@@ -91,7 +91,7 @@ function buildTestEmail({ message = 'Este es un correo de prueba de Kueski Widge
 async function sendEmail({ to, subject, text, html }) {
   const transporter = getTransporter();
   if (!transporter) {
-    throw new Error('SMTP email transport is not configured');
+    throw new Error('El transporte de correo SMTP no está configurado');
   }
 
   const config = getSmtpConfig();

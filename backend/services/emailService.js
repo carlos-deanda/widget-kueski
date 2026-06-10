@@ -22,7 +22,7 @@ async function sendPriceDropEmail({ to, userName, productName, previousPrice, cu
   const client = getResendClient();
 
   if (!client) {
-    return { sent: false, reason: 'RESEND_API_KEY is not configured' };
+    return { sent: false, reason: 'RESEND_API_KEY no está configurada' };
   }
 
   const previousLabel = `$${Number(previousPrice || 0).toFixed(2)}`;

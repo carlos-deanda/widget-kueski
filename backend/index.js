@@ -565,8 +565,8 @@ function formatDashboardPurchase(row) {
     productId: row.product_id,
     name: row.name,
     status: row.status,
-    paymentsLeft: `${remaining} payments left`,
-    amount: `$${money(row.installment_amount).toFixed(2)} biweekly`,
+    paymentsLeft: `${remaining} pagos restantes`,
+    amount: `$${money(row.installment_amount).toFixed(2)} quincenal`,
     installmentAmount: money(row.installment_amount),
     totalInstallments: row.total_installments,
     completedInstallments: row.completed_installments,
@@ -598,7 +598,7 @@ function formatTrackedProduct(row) {
     currentPrice,
     change: `${change.toFixed(1)}%`,
     trend: getPriceTrend(hasPreviousPrice, changeAmount),
-    badge: changeAmount < 0 ? 'Good Deal' : null,
+    badge: changeAmount < 0 ? 'Buena Oferta' : null,
     isActive: row.is_active,
   };
 }
@@ -774,7 +774,7 @@ app.get('/api/users/:userId/dashboard', async (req, res) => {
     ]);
 
     if (user.rowCount === 0) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
@@ -807,12 +807,12 @@ app.post('/api/users/:userId/phone-verification/start', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
     res.json({
-      message: 'Verification code generated',
+      message: 'Código de verificación generado',
       code,
     });
   } catch (error) {
@@ -840,7 +840,7 @@ app.post('/api/users/:userId/phone-verification/verify', async (req, res) => {
     );
 
     if (userResult.rowCount === 0) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
@@ -887,7 +887,7 @@ app.post('/api/users/:userId/price-trackings', async (req, res) => {
   const normalized = normalizePriceTrackingProduct(req.body);
 
   if (!normalized.productName || !normalized.currentPrice || !normalized.productUrl) {
-    res.status(400).json({ error: 'productName, currentPrice and productUrl are required' });
+    res.status(400).json({ error: 'Se requieren productName, currentPrice y productUrl' });
     return;
   }
 
@@ -899,7 +899,7 @@ app.post('/api/users/:userId/price-trackings', async (req, res) => {
     const userResult = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
     if (userResult.rowCount === 0) {
       await client.query('ROLLBACK');
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
@@ -987,7 +987,7 @@ app.post('/api/products/price-checks', async (req, res) => {
   const scrapedPrice = parseMoneyInput(req.body.price ?? req.body.currentPrice);
 
   if (!productUrl || !scrapedPrice || scrapedPrice <= 0) {
-    res.status(400).json({ error: 'productUrl and a valid price are required' });
+    res.status(400).json({ error: 'Se requieren productUrl y un precio válido' });
     return;
   }
 
@@ -1003,7 +1003,7 @@ app.post('/api/products/price-checks', async (req, res) => {
 
     if (productResult.rowCount === 0) {
       await client.query('ROLLBACK');
-      res.status(404).json({ error: 'Product not found for that URL' });
+      res.status(404).json({ error: 'Producto no encontrado para esa URL' });
       return;
     }
 
@@ -1068,7 +1068,7 @@ app.patch('/api/users/:userId/identity-verification', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
@@ -1092,7 +1092,7 @@ app.get('/api/users/:userId/notification-preferences', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
@@ -1127,7 +1127,7 @@ app.patch('/api/users/:userId/notification-preferences', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
@@ -1144,7 +1144,7 @@ app.get('/api/users/:userId/notifications/google/start', async (req, res) => {
     const user = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
 
     if (user.rowCount === 0) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
@@ -1177,7 +1177,7 @@ app.post('/api/users/:userId/price-alerts/test', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
@@ -1219,7 +1219,7 @@ app.post('/api/users/:userId/price-alerts', async (req, res) => {
   const { productName, previousPrice, currentPrice, productId } = req.body;
 
   if (!productName || previousPrice === undefined || currentPrice === undefined) {
-    res.status(400).json({ error: 'productName, previousPrice and currentPrice are required' });
+    res.status(400).json({ error: 'Se requieren productName, previousPrice y currentPrice' });
     return;
   }
 
@@ -1239,7 +1239,7 @@ app.post('/api/users/:userId/price-alerts', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
@@ -1304,7 +1304,7 @@ app.get('/api/users/:userId/credit-options', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
@@ -1373,7 +1373,7 @@ app.post('/api/users/:userId/credit-requests', async (req, res) => {
 
     if (userResult.rowCount === 0) {
       await client.query('ROLLBACK');
-      res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'Usuario no encontrado' });
       return;
     }
 
@@ -1471,7 +1471,7 @@ app.get('/api/purchases/:purchaseId', async (req, res) => {
     );
 
     if (purchase.rowCount === 0) {
-      res.status(404).json({ error: 'Purchase not found' });
+      res.status(404).json({ error: 'Compra no encontrada' });
       return;
     }
 
@@ -1514,7 +1514,7 @@ app.get('/api/purchases/:purchaseId/calendar/google/start', async (req, res) => 
     );
 
     if (purchase.rowCount === 0) {
-      res.status(404).json({ error: 'Purchase not found' });
+      res.status(404).json({ error: 'Compra no encontrada' });
       return;
     }
 
@@ -1689,7 +1689,7 @@ app.post('/api/purchases/:purchaseId/calendar/apple/open', async (req, res) => {
   if (process.platform !== 'darwin') {
     res.status(409).json({
       opened: false,
-      error: 'Apple Calendar automatic open is only available on macOS.',
+      error: 'La apertura automática de Apple Calendar solo está disponible en macOS.',
       fallbackUrl: `/api/purchases/${purchaseId}/calendar/ics`,
     });
     return;
@@ -1699,7 +1699,7 @@ app.post('/api/purchases/:purchaseId/calendar/apple/open', async (req, res) => {
     const calendarData = await getPurchaseCalendarData(purchaseId);
 
     if (!calendarData) {
-      res.status(404).json({ opened: false, error: 'Purchase not found.' });
+      res.status(404).json({ opened: false, error: 'Compra no encontrada.' });
       return;
     }
 
@@ -1752,7 +1752,7 @@ app.post('/api/calendar/checkout/apple/open', async (req, res) => {
   if (process.platform !== 'darwin') {
     res.status(409).json({
       opened: false,
-      error: 'Apple Calendar automatic open is only available on macOS.',
+      error: 'La apertura automática de Apple Calendar solo está disponible en macOS.',
       fallbackUrl: '/api/calendar/checkout/ics',
     });
     return;
@@ -1827,7 +1827,7 @@ app.get('/api/price-trackings/:trackingId', async (req, res) => {
     );
 
     if (tracking.rowCount === 0) {
-      res.status(404).json({ error: 'Tracking not found' });
+      res.status(404).json({ error: 'Seguimiento no encontrado' });
       return;
     }
 
@@ -1870,7 +1870,7 @@ app.post('/api/notifications/email/test', async (req, res) => {
     if (!hasEmailTransport()) {
       res.status(503).json({
         ok: false,
-        error: 'SMTP not configured',
+        error: 'SMTP no configurado',
         ...getEmailAlertStatus(),
       });
       return;
@@ -1878,7 +1878,7 @@ app.post('/api/notifications/email/test', async (req, res) => {
 
     const userId = Number(req.body.userId || 0);
     if (!userId) {
-      res.status(400).json({ ok: false, error: 'userId is required' });
+      res.status(400).json({ ok: false, error: 'Se requiere userId' });
       return;
     }
 
@@ -1994,7 +1994,7 @@ function getSimilarityScore(str1, str2) {
 app.get('/api/external/search', async (req, res) => {
   const { q } = req.query;
   if (!q) {
-    res.status(400).json({ error: 'Query parameter "q" is required' });
+    res.status(400).json({ error: 'Se requiere el parámetro de consulta "q"' });
     return;
   }
 
