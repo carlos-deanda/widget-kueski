@@ -249,6 +249,7 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
         });
         setPageProductError('');
         setIsDetectingPageProduct(false);
+
       };
 
       const handleMessageFailure = () => {

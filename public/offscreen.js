@@ -88,16 +88,15 @@ function extractPriceFromHtml(html) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== 'kueski_parse_product_price') {
-    return false;
+  if (message?.type === 'kueski_parse_product_price') {
+    try {
+      const price = extractPriceFromHtml(message.html || '');
+      sendResponse({ ok: true, price });
+    } catch (error) {
+      sendResponse({ ok: false, error: error.message });
+    }
+    return true;
   }
 
-  try {
-    const price = extractPriceFromHtml(message.html || '');
-    sendResponse({ ok: true, price });
-  } catch (error) {
-    sendResponse({ ok: false, error: error.message });
-  }
-
-  return true;
+  return false;
 });

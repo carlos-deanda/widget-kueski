@@ -85,28 +85,40 @@ function extraerNombre() {
     'meta[itemprop="name"]',
   ];
 
-  for (let selector of metaSelectors) {
-    const elemento = document.querySelector(selector);
-    const value = elemento?.getAttribute("content");
-    if (value && value.trim() !== "") {
-      return value.trim();
-    }
-  }
-
   for (let selector of selectoresNombre) {
     const elemento = document.querySelector(selector);
     const value = (elemento?.innerText || elemento?.textContent || "").trim();
     if (value !== "") {
-      return value;
+      return limpiarNombreProducto(value);
+    }
+  }
+
+  for (let selector of metaSelectors) {
+    const elemento = document.querySelector(selector);
+    const value = elemento?.getAttribute("content");
+    if (value && value.trim() !== "") {
+      return limpiarNombreProducto(value);
     }
   }
 
   const jsonLdProduct = extraerProductoJsonLd();
   if (jsonLdProduct?.name) {
-    return String(jsonLdProduct.name);
+    return limpiarNombreProducto(String(jsonLdProduct.name));
   }
 
-  return document.title; // Fallback: título de la pestaña
+  return limpiarNombreProducto(document.title); // Fallback: título de la pestaña
+}
+
+function limpiarNombreProducto(name) {
+  if (!name) return "";
+  let clean = name.trim();
+  // Limpiar sufijos típicos de Amazon y tiendas
+  clean = clean.replace(/:\s*Amazon\.com\.mx.*$/gi, '');
+  clean = clean.replace(/:\s*Amazon\.com.*$/gi, '');
+  clean = clean.replace(/\|\s*Amazon.*$/gi, '');
+  clean = clean.replace(/\s+-\s+Amazon\.com\.mx.*$/gi, '');
+  clean = clean.replace(/\s+-\s+Mercado\s+Libre.*$/gi, '');
+  return clean.trim();
 }
 
 function normalizarJsonLdNodo(node) {

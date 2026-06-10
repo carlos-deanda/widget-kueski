@@ -10,6 +10,13 @@ function CurrentPageProductCard({
 }) {
   const priceLabel = product?.price || (product?.currentPrice ? `$${Number(product.currentPrice).toFixed(2)}` : null);
   const canTrack = product && !trackedProduct && !isLoading && !isTracking;
+  const pagePrice = Number(product?.currentPrice);
+  const trackedPrice = Number(trackedProduct?.currentPrice);
+  const canCompareTrackedPrice = Number.isFinite(pagePrice) && Number.isFinite(trackedPrice) && trackedPrice > 0;
+  const priceDifference = canCompareTrackedPrice ? pagePrice - trackedPrice : 0;
+  const priceDifferencePct = canCompareTrackedPrice ? Math.abs((priceDifference / trackedPrice) * 100) : 0;
+  const priceTrendLabel = priceDifference < 0 ? 'Bajó' : priceDifference > 0 ? 'Subió' : 'Sin cambios';
+  const priceTrendClass = priceDifference < 0 ? 'text-[#16A34A]' : priceDifference > 0 ? 'text-[#EF4444]' : 'text-[#6B7280]';
 
   return (
     <section className="mt-4 rounded-3xl border border-[#D1D5DB]/80 bg-white p-5 shadow-[0_10px_26px_rgba(32,33,42,0.06)]">
@@ -60,6 +67,43 @@ function CurrentPageProductCard({
           Actualizar
         </button>
       </div>
+
+      {product && (
+        <div className="mt-4 border-t border-gray-100 pt-4">
+          <p className="mb-2 text-xs font-bold uppercase text-[#6B7280]">Comparativa de tienda</p>
+
+          {trackedProduct && canCompareTrackedPrice ? (
+            <div className="rounded-2xl border border-[#D1D5DB] bg-gray-50 p-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280]">Página actual</p>
+                  <p className="mt-1 text-base font-black text-[#20212A]">
+                    ${pagePrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280]">Último registro</p>
+                  <p className="mt-1 text-base font-black text-[#20212A]">
+                    ${trackedPrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+              <p className={`mt-3 text-xs font-bold ${priceTrendClass}`}>
+                {priceTrendLabel}
+                {priceDifference !== 0 && ` $${Math.abs(priceDifference).toLocaleString('es-MX', { maximumFractionDigits: 2 })} (${priceDifferencePct.toFixed(0)}%)`}
+              </p>
+            </div>
+          ) : trackedProduct ? (
+            <p className="py-1 text-xs font-medium text-[#6B7280]">
+              Este producto ya está en seguimiento. Abre su historial para ver los cambios registrados.
+            </p>
+          ) : (
+            <p className="py-1 text-xs font-medium text-[#6B7280]">
+              Disponible para seguimiento en esta tienda. Al agregarlo, el widget comparará futuras lecturas contra el historial guardado.
+            </p>
+          )}
+        </div>
+      )}
 
       {product && (
         <div className="mt-4">

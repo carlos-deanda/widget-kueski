@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://127.0.0.1:3001';
+const API_BASE_URL = 'http://localhost:3001';
 const PRICE_CHECK_ALARM = 'price-check';
 const PRICE_SNAPSHOT_KEY = 'priceSnapshotsByUser';
 const ACTIVE_USER_KEY = 'activeUserId';
@@ -366,10 +366,6 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!message || !message.type) {
-    return false;
-  }
-
   if (message.type === 'register_user_session') {
     (async () => {
       await setStoredValue(ACTIVE_USER_KEY, message.userId || null);
