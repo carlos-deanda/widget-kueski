@@ -4,10 +4,16 @@ import MenuPage from './pages/MenuPage.jsx';
 import NotificationPreferencesPage from './pages/NotificationPreferencesPage.jsx';
 import { NotificationProvider } from './components/NotificationCenter.jsx';
 import { getNotificationPreferences } from './api.js';
+import { obtenerTiendaAfiliada } from './config/tiendasAfiliadas.js';
 
 const SESSION_STORAGE_KEY = 'kueski_widget_session_v1';
 const SESSION_DURATION_HOURS = 6;
 const SESSION_DURATION_MS = SESSION_DURATION_HOURS * 60 * 60 * 1000;
+const DEFAULT_STORE_DETECTION = {
+  hostname: '',
+  tiendaAfiliada: null,
+  esTiendaAfiliada: false,
+};
 
 function getStoredSession() {
   try {
@@ -44,11 +50,83 @@ function clearSession() {
   localStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
+function getHostnameFromUrl(url) {
+  try {
+    return new URL(url).hostname || '';
+  } catch {
+    return '';
+  }
+}
+
+function getWindowHostname() {
+  try {
+    return window.location.hostname || '';
+  } catch {
+    return '';
+  }
+}
+
+function isExtensionPopupContext() {
+  try {
+    return window.location.protocol === 'chrome-extension:'
+      || window.location.protocol === 'moz-extension:';
+  } catch {
+    return false;
+  }
+}
+
+function getActiveTabHostname() {
+  if (typeof chrome === 'undefined' || !chrome.tabs?.query) {
+    return Promise.resolve('');
+  }
+
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (chrome.runtime?.lastError) {
+        resolve('');
+        return;
+      }
+
+      resolve(getHostnameFromUrl(tabs?.[0]?.url || ''));
+    });
+  });
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [needsPreferencesSetup, setNeedsPreferencesSetup] = useState(false);
   const [preferencesMode, setPreferencesMode] = useState('setup');
   const [isBootstrappingSession, setIsBootstrappingSession] = useState(true);
+  const [storeDetection, setStoreDetection] = useState(DEFAULT_STORE_DETECTION);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const detectStore = async () => {
+      const windowHostname = getWindowHostname();
+      const activeTabHostname = isExtensionPopupContext()
+        ? await getActiveTabHostname()
+        : '';
+      const hostname = activeTabHostname || windowHostname;
+      const tiendaAfiliada = obtenerTiendaAfiliada(hostname);
+
+      if (!isMounted) {
+        return;
+      }
+
+      setStoreDetection({
+        hostname,
+        tiendaAfiliada,
+        esTiendaAfiliada: Boolean(tiendaAfiliada),
+      });
+    };
+
+    detectStore();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
@@ -158,6 +236,7 @@ function App() {
           onLogout={handleLogout}
           onClose={handleCloseWidget}
           onEditNotificationPreferences={handleOpenPreferences}
+          storeDetection={storeDetection}
         />
       )}
     </NotificationProvider>

@@ -134,7 +134,7 @@ function formatExpiration(timestamp) {
   });
 }
 
-export default function SuccessPage({ onBack, onClose }) {
+export default function SuccessPage({ onBack, onClose, storeDetection }) {
   const [card, setCard] = useState(() => getStoredCard());
   const [verification, setVerification] = useState(() => getStoredVerification());
   const [isVerifying, setIsVerifying] = useState(false);
@@ -142,13 +142,14 @@ export default function SuccessPage({ onBack, onClose }) {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [now, setNow] = useState(() => Date.now());
 
+  const isAffiliateStore = Boolean(storeDetection?.esTiendaAfiliada);
   const lockUntil = Number(verification.lockUntil || 0);
   const isLocked = lockUntil > now;
   const lockRemaining = Math.max(0, lockUntil - now);
   const remaining = card?.estado === 'activa'
     ? Math.max(0, Number(card.expiracion) - now)
     : 0;
-  const isDigitalCardFlow = isVerifying || Boolean(card);
+  const isDigitalCardFlow = !isAffiliateStore && (isVerifying || Boolean(card));
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -322,6 +323,33 @@ export default function SuccessPage({ onBack, onClose }) {
     >
       Volver al menú principal
     </button>
+  );
+
+  const renderStoreNotice = () => {
+    const noticeClass = isAffiliateStore
+      ? 'mb-5 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm font-medium leading-relaxed text-[#16A34A]'
+      : 'mb-5 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-medium leading-relaxed text-[#4B73F8]';
+    const noticeText = isAffiliateStore
+      ? 'Esta tienda acepta Kueski Pay directamente. Selecciona Kueski Pay al pagar — no necesitas tarjeta.'
+      : 'Esta tienda no acepta Kueski Pay directamente. Puedes generar una tarjeta digital para pagar tu compra.';
+
+    return <p className={noticeClass}>{noticeText}</p>;
+  };
+
+  const renderAffiliatedStore = () => (
+    <>
+      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-green-50 text-[#5FCB71]">
+        <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="m5 13 4 4L19 7" />
+        </svg>
+      </div>
+
+      <div className="mt-6">
+        {renderStoreNotice()}
+      </div>
+
+      {renderBackButton()}
+    </>
   );
 
   const renderVerification = () => (
@@ -519,6 +547,10 @@ export default function SuccessPage({ onBack, onClose }) {
   );
 
   const renderContent = () => {
+    if (isAffiliateStore) {
+      return renderAffiliatedStore();
+    }
+
     if (isVerifying) {
       return renderVerification();
     }
@@ -540,7 +572,12 @@ export default function SuccessPage({ onBack, onClose }) {
 
       <main className={isDigitalCardFlow ? 'flex grow flex-col items-center overflow-y-auto px-5 pb-6 pt-2 text-center' : 'flex grow flex-col items-center justify-center overflow-y-auto px-5 py-6 text-center'}>
         <div className={isDigitalCardFlow ? 'mb-4 w-full rounded-3xl border border-[#D1D5DB]/80 bg-white p-6 shadow-[0_12px_30px_rgba(32,33,42,0.08)]' : 'mb-4 w-full rounded-3xl border border-[#D1D5DB]/80 bg-white p-8 shadow-[0_12px_30px_rgba(32,33,42,0.08)]'}>
-          {renderContent()}
+          {isAffiliateStore ? renderContent() : (
+            <>
+              {renderStoreNotice()}
+              {renderContent()}
+            </>
+          )}
         </div>
 
         <p className="mt-auto pb-4 text-xs font-bold uppercase text-[#6B7280]">

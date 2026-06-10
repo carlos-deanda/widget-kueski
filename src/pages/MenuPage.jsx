@@ -72,7 +72,7 @@ function getTrackingTrendLabel(trend) {
 }
 
 // 1. Recibimos onClose desde las props
-function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
+function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, storeDetection }) {
   const {
     error: notifyError,
     info: notifyInfo,
@@ -293,7 +293,41 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
     readCurrentPageProduct({ silent: true });
   }, [readCurrentPageProduct]);
 
-  const handleGoToCheckout = ({ useTrackedProduct = false } = {}) => {
+  const getCheckoutFallbackProduct = () => pageProduct || getSelectedTrackedProduct();
+
+  const checkoutWithFallbackProduct = () => {
+    const fallbackProduct = getCheckoutFallbackProduct();
+
+    if (!fallbackProduct?.name) {
+      notifyWarning('No encontramos un producto para continuar al checkout.', { title: 'Sin producto' });
+      return;
+    }
+
+    setCheckoutProduct(fallbackProduct);
+    setCapturedPrice(fallbackProduct?.price || '');
+    setScreen('checkout');
+  };
+
+  const goToCheckoutWithProduct = (response = {}) => {
+    const baseProduct = getCheckoutFallbackProduct();
+    const responsePrice = parsePagePrice(response?.price) ? response.price : '';
+    const productData = {
+      ...baseProduct,
+      name: response?.name || baseProduct.name || 'Producto de la página actual',
+      currentPrice: responsePrice || baseProduct.currentPrice || baseProduct.price || '0',
+      price: responsePrice || baseProduct.price,
+      productUrl: response?.productUrl || response?.url || baseProduct.productUrl,
+      storeName: response?.storeName || baseProduct.storeName,
+    };
+
+    setCheckoutProduct(productData);
+    setCapturedPrice(responsePrice || baseProduct?.price || '');
+    setScreen('checkout');
+  };
+
+  const handleGoToCheckout = (options = {}) => {
+    const useTrackedProduct = options?.useTrackedProduct === true;
+
     if (useTrackedProduct) {
       if (!trackedProducts.length) {
         notifyWarning('No tienes productos en seguimiento para continuar al checkout.', { title: 'Sin productos' });
@@ -317,30 +351,19 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
           tabs[0].id,
           { action: 'GET_PRODUCT_PRICE' },
           (response) => {
-            const baseProduct = getSelectedTrackedProduct();
-            const productData = {
-              ...baseProduct,
-              name: response?.name || baseProduct.name || "Producto de Amazon",
-              currentPrice: response?.price || baseProduct.price || "0",
-            };
-            setCheckoutProduct(productData);
-            setCapturedPrice(response?.price || '');
-            setScreen('checkout');
+            if (chrome.runtime?.lastError) {
+              checkoutWithFallbackProduct();
+              return;
+            }
+
+            goToCheckoutWithProduct(response);
           }
         );
       });
       return;
     }
 
-    const fallbackProduct = pageProduct || getSelectedTrackedProduct();
-    if (!fallbackProduct?.name) {
-      notifyWarning('No encontramos un producto para continuar al checkout.', { title: 'Sin producto' });
-      return;
-    }
-
-    setCheckoutProduct(fallbackProduct);
-    setCapturedPrice(fallbackProduct?.price || '$1,234.56');
-    setScreen('checkout');
+    checkoutWithFallbackProduct();
   };
 
   const handleTrackPageProduct = async () => {
@@ -530,7 +553,7 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences }) {
   }
 
   if (screen === 'success') {
-    return <SuccessPage onBack={() => setScreen('home')} onClose={onClose} />;
+    return <SuccessPage onBack={() => setScreen('home')} onClose={onClose} storeDetection={storeDetection} />;
   }
 
   if (screen === 'error') {
