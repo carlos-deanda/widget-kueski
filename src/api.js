@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
 async function parseJsonResponse(response) {
   const contentType = response.headers.get('content-type') || '';
@@ -163,4 +163,26 @@ export function openCheckoutAppleCalendar(payload) {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+}
+
+export async function searchMercadoLibre(query) {
+  try {
+    const data = await request(`/api/external/search?q=${encodeURIComponent(query)}`);
+    const results = data.results || [];
+    return results.find(r => r.store === 'Mercado Libre') || null;
+  } catch (error) {
+    console.warn('Error fetching Mercado Libre price via backend:', error);
+    return null;
+  }
+}
+
+export async function searchElektra(query) {
+  try {
+    const data = await request(`/api/external/search?q=${encodeURIComponent(query)}`);
+    const results = data.results || [];
+    return results.find(r => r.store === 'Elektra') || null;
+  } catch (error) {
+    console.warn('Error fetching Elektra price via backend:', error);
+    return null;
+  }
 }
