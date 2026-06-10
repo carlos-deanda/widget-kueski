@@ -8,6 +8,7 @@ import TopBar from '../components/TopBar.jsx';
 import CurrentPageProductCard from '../components/CurrentPageProductCard.jsx';
 import { createPriceTracking, deletePriceTracking, getDashboard, sendTestPriceAlertEmail } from '../api.js';
 import { obtenerDeteccionTiendaDesdeUrl } from '../config/tiendasAfiliadas.js';
+import { openExternalUrl } from '../utils/openExternalUrl.js';
 import SuccessPage from './SuccessPage.jsx';
 import ErrorPage from './ErrorPage.jsx';
 import { useNotifications } from '../components/useNotifications.js';
@@ -824,7 +825,24 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
                       <div className={`mb-2 inline-flex rounded-full px-3 py-1 text-xs font-bold ${getTrackingTrendBadge(product.trend)}`}>
                         {getTrackingTrendLabel(product.trend)}
                       </div>
-                      <h3 className="font-bold text-[#20212A]">{product.name}</h3>
+                      {product.productUrl ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openExternalUrl(product.productUrl);
+                          }}
+                          title="Abrir la página del producto"
+                          className="inline-flex items-center gap-1 text-left font-bold text-[#20212A] transition-colors hover:text-[#4B73F8] hover:underline"
+                        >
+                          {product.name}
+                          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <h3 className="font-bold text-[#20212A]">{product.name}</h3>
+                      )}
                       <p className="mt-2 text-lg font-bold text-[#20212A]">{product.price}</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">

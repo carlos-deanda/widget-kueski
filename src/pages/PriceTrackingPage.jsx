@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import TopBar from '../components/TopBar.jsx';
 import { getPriceTracking } from '../api.js';
+import { openExternalUrl } from '../utils/openExternalUrl.js';
 
 function PriceTrackingPage({ trackingId, onBack, onCheckout, onDelete, onClose }) { // Se añade onClose a las props
   const [tracking, setTracking] = useState(null);
@@ -105,7 +106,21 @@ function PriceTrackingPage({ trackingId, onBack, onCheckout, onDelete, onClose }
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold uppercase text-[#6B7280]">Producto</p>
-                  <p className="mt-1 text-xl font-bold leading-tight text-[#20212A]">{tracking.productName}</p>
+                  {tracking.productUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => openExternalUrl(tracking.productUrl)}
+                      title="Abrir la página del producto"
+                      className="mt-1 inline-flex items-start gap-1.5 text-left text-xl font-bold leading-tight text-[#20212A] transition-colors hover:text-[#4B73F8] hover:underline"
+                    >
+                      {tracking.productName}
+                      <svg className="mt-1 h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <p className="mt-1 text-xl font-bold leading-tight text-[#20212A]">{tracking.productName}</p>
+                  )}
                 </div>
 
                 <div className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${trendStyle}`}>
