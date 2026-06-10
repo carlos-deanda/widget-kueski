@@ -58,7 +58,7 @@ function LoginPage({ onLogin, onClose }) {
         onClick={onClose}
         type="button"
         className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-xl font-medium leading-none text-[#20212A]/60 transition-colors hover:bg-gray-100 hover:text-[#20212A] active:scale-95"
-        aria-label="Close"
+        aria-label="Cerrar"
       >
         x
       </button>

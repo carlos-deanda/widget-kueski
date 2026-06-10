@@ -16,13 +16,17 @@ ON CONFLICT (id) DO UPDATE SET
 
 INSERT INTO products (id, name, description, store_name, current_price)
 VALUES
-  (1, 'Premium Headphones', 'Wireless headphones with active noise cancellation.', 'Demo Store', 1299.99),
-  (2, 'Smart Watch Pro', 'Smart watch with health tracking.', 'Demo Store', 849.99),
-  (3, 'Ultra HD Monitor', '4K productivity monitor.', 'Demo Store', 2499.99),
-  (4, 'Gaming Laptop RTX', 'Gaming laptop with RTX graphics.', 'Demo Store', 1899.99),
-  (5, 'Mechanical Keyboard', 'Mechanical keyboard for productivity and gaming.', 'Demo Store', 189.99),
-  (6, 'Office Chair Pro', 'Ergonomic office chair.', 'Demo Store', 449.99)
-ON CONFLICT (id) DO NOTHING;
+  (1, 'Audífonos Premium', 'Audífonos inalámbricos con cancelación activa de ruido.', 'Tienda de demostración', 1299.99),
+  (2, 'Reloj Inteligente Pro', 'Reloj inteligente con monitoreo de salud.', 'Tienda de demostración', 849.99),
+  (3, 'Monitor Ultra HD', 'Monitor de productividad 4K.', 'Tienda de demostración', 2499.99),
+  (4, 'Laptop Gaming RTX', 'Laptop para juegos con tarjeta de video RTX.', 'Tienda de demostración', 1899.99),
+  (5, 'Teclado Mecánico', 'Teclado mecánico para productividad y juegos.', 'Tienda de demostración', 189.99),
+  (6, 'Silla de Oficina Pro', 'Silla de oficina ergonómica.', 'Tienda de demostración', 449.99)
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  store_name = EXCLUDED.store_name,
+  current_price = EXCLUDED.current_price;
 
 INSERT INTO purchases (
   id,

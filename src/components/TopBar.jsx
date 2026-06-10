@@ -18,7 +18,7 @@ function TopBar({ onClose }) {
           onClick={onClose}
           type="button"
           className="flex h-9 w-9 items-center justify-center rounded-full text-[#20212A]/60 transition-all hover:bg-gray-100 hover:text-[#20212A] active:scale-95"
-          aria-label="Close"
+          aria-label="Cerrar"
         >
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18 18 6M6 6l12 12" />
