@@ -135,6 +135,29 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
     return () => { isMounted = false; };
   }, [notifyError, notifyInfo, notifySuccess, user.id]);
 
+  // Refresca el dashboard cuando el background detecta cambios de precio reales.
+  useEffect(() => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.onMessage) {
+      return undefined;
+    }
+
+    const handleBackgroundMessage = (message) => {
+      if (message?.type !== 'prices_updated') return;
+
+      getDashboard(user.id)
+        .then((data) => {
+          setDashboard(data);
+          setCurrentUser(data.user);
+        })
+        .catch(() => {
+          // Refresco silencioso; si falla, el usuario verá los datos previos.
+        });
+    };
+
+    chrome.runtime.onMessage.addListener(handleBackgroundMessage);
+    return () => chrome.runtime.onMessage.removeListener(handleBackgroundMessage);
+  }, [user.id]);
+
   const activePurchases = dashboard?.activePurchases || [];
   const trackedProducts = dashboard?.trackedProducts || [];
   const notificationPreferences = currentUser?.priceNotificationPreferences || {};
@@ -458,6 +481,8 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
         const emailSent = response.result?.emailAlertsSent || 0;
         const calendarSent = response.result?.calendarAlertsSent || 0;
         const totalSent = response.result?.notificationsSent || 0;
+        const pricesScraped = response.result?.pricesScraped || 0;
+        const pricesUpdated = response.result?.pricesUpdated || 0;
 
         if (totalSent > 0) {
           const parts = [];
@@ -465,6 +490,16 @@ function MenuPage({ user, onLogout, onClose, onEditNotificationPreferences, stor
           if (emailSent > 0) parts.push(`${emailSent} por correo`);
           if (calendarSent > 0) parts.push(`${calendarSent} en calendario`);
           notifySuccess(`Revisión lista: ${parts.join(', ')}.`, { title: 'Chequeo de precios' });
+          return;
+        }
+
+        if (pricesScraped > 0) {
+          notifyInfo(
+            pricesUpdated > 0
+              ? `Se revisaron ${pricesScraped} producto(s) en tienda y ${pricesUpdated} cambiaron de precio, sin bajadas que alertar.`
+              : `Se revisaron ${pricesScraped} producto(s) en tienda. Los precios siguen igual.`,
+            { title: 'Chequeo de precios' },
+          );
           return;
         }
 

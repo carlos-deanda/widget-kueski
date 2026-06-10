@@ -979,6 +979,78 @@ app.post('/api/users/:userId/price-trackings', async (req, res) => {
   }
 });
 
+// Recibe precios re-verificados (scraping del background de la extensión)
+// y los registra en products + price_history. Las alertas (browser, Resend,
+// Calendar) las dispara el background al comparar contra su snapshot.
+app.post('/api/products/price-checks', async (req, res) => {
+  const productUrl = normalizeProductUrl(req.body.productUrl || req.body.url);
+  const scrapedPrice = parseMoneyInput(req.body.price ?? req.body.currentPrice);
+
+  if (!productUrl || !scrapedPrice || scrapedPrice <= 0) {
+    res.status(400).json({ error: 'productUrl and a valid price are required' });
+    return;
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const productResult = await client.query(
+      'SELECT id, name, current_price FROM products WHERE product_url = $1 FOR UPDATE',
+      [productUrl]
+    );
+
+    if (productResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ error: 'Product not found for that URL' });
+      return;
+    }
+
+    const product = productResult.rows[0];
+    const previousPrice = money(product.current_price);
+
+    if (previousPrice === scrapedPrice) {
+      await client.query('ROLLBACK');
+      res.json({ ok: true, updated: false, productId: product.id, currentPrice: previousPrice });
+      return;
+    }
+
+    // Guard contra lecturas erróneas del scraper (selector equivocado, etc.)
+    if (previousPrice > 0 && (scrapedPrice < previousPrice * 0.05 || scrapedPrice > previousPrice * 20)) {
+      await client.query('ROLLBACK');
+      res.json({
+        ok: true,
+        updated: false,
+        skippedReason: 'Price change looks suspicious, ignored',
+        productId: product.id,
+        currentPrice: previousPrice,
+        scrapedPrice,
+      });
+      return;
+    }
+
+    await client.query('UPDATE products SET current_price = $1 WHERE id = $2', [scrapedPrice, product.id]);
+    await client.query('INSERT INTO price_history (product_id, price) VALUES ($1, $2)', [product.id, scrapedPrice]);
+    await client.query('COMMIT');
+
+    res.json({
+      ok: true,
+      updated: true,
+      productId: product.id,
+      productName: product.name,
+      previousPrice,
+      currentPrice: scrapedPrice,
+      priceDropped: scrapedPrice < previousPrice,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.patch('/api/users/:userId/identity-verification', async (req, res) => {
   const { userId } = req.params;
 

@@ -2,7 +2,10 @@ const API_BASE_URL = 'http://127.0.0.1:3001';
 const PRICE_CHECK_ALARM = 'price-check';
 const PRICE_SNAPSHOT_KEY = 'priceSnapshotsByUser';
 const ACTIVE_USER_KEY = 'activeUserId';
+const LAST_SCRAPE_KEY = 'lastPriceScrapeAt';
 const DEFAULT_PERIOD_MINUTES = 1;
+// Cada cuántos minutos se re-leen los precios reales en las tiendas.
+const SCRAPE_PERIOD_MINUTES = 5;
 
 console.log('Kueski background service worker started');
 
@@ -118,13 +121,170 @@ async function sendRemotePriceAlert(userId, product, previousPrice, currentPrice
   }
 }
 
-async function handlePriceCheck({ forceNotifyDown = false } = {}) {
+// ---------------------------------------------------------------------------
+// Scraping real de precios: el background descarga la página de cada producto
+// seguido, extrae el precio con un documento offscreen (DOMParser) y lo
+// reporta al backend, que actualiza products + price_history.
+// ---------------------------------------------------------------------------
+
+let offscreenCreationPromise = null;
+
+async function ensureOffscreenDocument() {
+  if (!chrome.offscreen?.createDocument) {
+    console.warn('chrome.offscreen no disponible; no se puede parsear HTML.');
+    return false;
+  }
+
+  try {
+    if (chrome.offscreen.hasDocument && await chrome.offscreen.hasDocument()) {
+      return true;
+    }
+  } catch {
+    // hasDocument no soportado; intentamos crear directamente.
+  }
+
+  if (!offscreenCreationPromise) {
+    offscreenCreationPromise = chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['DOM_PARSER'],
+      justification: 'Extraer precios de las páginas de productos en seguimiento',
+    }).catch((error) => {
+      if (!String(error?.message || '').includes('single offscreen')) {
+        throw error;
+      }
+    }).finally(() => {
+      offscreenCreationPromise = null;
+    });
+  }
+
+  try {
+    await offscreenCreationPromise;
+    return true;
+  } catch (error) {
+    console.warn('No se pudo crear el documento offscreen', error);
+    return false;
+  }
+}
+
+async function parsePriceFromHtml(html) {
+  const ready = await ensureOffscreenDocument();
+  if (!ready) return null;
+
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: 'kueski_parse_product_price', html }, (response) => {
+      if (chrome.runtime?.lastError || !response?.ok) {
+        resolve(null);
+        return;
+      }
+      resolve(response.price ?? null);
+    });
+  });
+}
+
+async function scrapeProductPrice(productUrl) {
+  const response = await fetch(productUrl, {
+    headers: {
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'es-MX,es;q=0.9',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  const html = await response.text();
+  return parsePriceFromHtml(html);
+}
+
+async function reportPriceCheck(productUrl, price) {
+  const response = await fetch(`${API_BASE_URL}/api/products/price-checks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productUrl, price }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || 'No se pudo registrar el precio');
+  }
+
+  return data;
+}
+
+async function scrapeTrackedPrices(trackedProducts) {
+  const summary = { checked: 0, updated: 0, dropped: 0, failures: 0 };
+
+  for (const product of trackedProducts) {
+    if (!product?.productUrl || product.isActive === false) continue;
+
+    try {
+      const price = await scrapeProductPrice(product.productUrl);
+      summary.checked += 1;
+
+      if (!price) {
+        console.warn('No se pudo extraer precio de', product.productUrl);
+        summary.failures += 1;
+        continue;
+      }
+
+      const result = await reportPriceCheck(product.productUrl, price);
+      if (result.updated) {
+        summary.updated += 1;
+        if (result.priceDropped) summary.dropped += 1;
+        console.log(`Precio actualizado: ${product.name} ${result.previousPrice} -> ${result.currentPrice}`);
+      }
+    } catch (error) {
+      summary.failures += 1;
+      console.warn('Fallo el chequeo de precio para', product.productUrl, error);
+    }
+
+    // Pausa corta entre productos para no saturar a la tienda.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+
+  await setStoredValue(LAST_SCRAPE_KEY, Date.now());
+  return summary;
+}
+
+async function shouldScrapeNow() {
+  const lastScrapeAt = await getStoredValue(LAST_SCRAPE_KEY, 0);
+  return Date.now() - lastScrapeAt >= SCRAPE_PERIOD_MINUTES * 60 * 1000;
+}
+
+function broadcastPricesUpdated() {
+  try {
+    chrome.runtime.sendMessage({ type: 'prices_updated' }, () => {
+      // Si el popup está cerrado no hay receptor; ignoramos el error.
+      void chrome.runtime.lastError;
+    });
+  } catch {
+    // Sin receptores activos.
+  }
+}
+
+async function handlePriceCheck({ forceNotifyDown = false, forceScrape = false } = {}) {
   const userId = await getStoredValue(ACTIVE_USER_KEY, null);
   if (!userId) {
     return { ok: false, reason: 'No active user' };
   }
 
-  const data = await fetchDashboard(userId);
+  let data = await fetchDashboard(userId);
+  let scrapeSummary = null;
+
+  // Re-lee los precios reales en la tienda antes de comparar.
+  if (forceScrape || await shouldScrapeNow()) {
+    const productsToScrape = Array.isArray(data?.trackedProducts) ? data.trackedProducts : [];
+
+    if (productsToScrape.length > 0) {
+      scrapeSummary = await scrapeTrackedPrices(productsToScrape);
+
+      if (scrapeSummary.updated > 0) {
+        data = await fetchDashboard(userId);
+      }
+    }
+  }
+
   const trackedProducts = Array.isArray(data?.trackedProducts) ? data.trackedProducts : [];
   const preferences = data?.user?.priceNotificationPreferences || {};
   const previousSnapshot = await getUserSnapshot(userId);
@@ -176,12 +336,18 @@ async function handlePriceCheck({ forceNotifyDown = false } = {}) {
 
   await updateUserSnapshot(userId, trackedProducts);
 
+  if (scrapeSummary?.updated > 0 || notifications.length > 0) {
+    broadcastPricesUpdated();
+  }
+
   const alertsSent = notifications.length + emailAlertsSent + calendarAlertsSent;
 
   return {
     ok: true,
     userId,
     trackedProducts: trackedProducts.length,
+    pricesScraped: scrapeSummary?.checked || 0,
+    pricesUpdated: scrapeSummary?.updated || 0,
     notificationsSent: alertsSent,
     browserNotificationsSent: notifications.length,
     emailAlertsSent,
@@ -259,7 +425,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'check_prices_now') {
     (async () => {
       try {
-        const result = await handlePriceCheck({ forceNotifyDown: !!message.forceNotifyDown });
+        const result = await handlePriceCheck({
+          forceNotifyDown: !!message.forceNotifyDown,
+          forceScrape: true,
+        });
         sendResponse({ ok: true, result });
       } catch (error) {
         sendResponse({ ok: false, error: error.message });
