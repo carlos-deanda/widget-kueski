@@ -28,6 +28,8 @@
     "*://stevemadden.com.mx/*",
     "*://*.innvictus.com/*",
     "*://innvictus.com/*",
+    "https://api.mercadolibre.com/*",
+    "https://*.elektra.mx/*",
     "http://127.0.0.1:3001/*",
     "http://localhost:3001/*"
   ],

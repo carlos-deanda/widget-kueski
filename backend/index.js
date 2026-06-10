@@ -1898,6 +1898,138 @@ app.post('/api/notifications/email/price-check', async (req, res) => {
   }
 });
 
+function cleanSearchQuery(q) {
+  if (!q) return '';
+  let clean = q.trim();
+  
+  // 1. Remove text in brackets [] or parentheses ()
+  clean = clean.replace(/\[[^\]]*\]/g, '');
+  clean = clean.replace(/\([^)]*\)/g, '');
+  
+  // 2. Remove common noise descriptors in Mexican e-commerce
+  const noisePatterns = [
+    /edici\u00f3n\s+est\u00e1ndar/gi,
+    /standard\s+edition/gi,
+    /edici\u00f3n\s+especial/gi,
+    /special\s+edition/gi,
+    /importado/gi,
+    /nacional/gi,
+    /preventa/gi,
+    /nuevo/gi,
+    /original/gi,
+    /con\s+env\u00edo\s+gratis/gi,
+    /envio\s+gratis/gi,
+    /meses\s+sin\s+intereses/gi,
+    /msi/gi
+  ];
+  
+  for (const pattern of noisePatterns) {
+    clean = clean.replace(pattern, '');
+  }
+  
+  // 3. Replace punctuation/symbols with spaces
+  clean = clean.replace(/[.,#!$%^&*;:{}=\-_`~()[\]]/g, ' ');
+  clean = clean.replace(/\//g, ' ');
+  
+  // 4. Collapse spaces
+  clean = clean.replace(/\s+/g, ' ').trim();
+  
+  // 5. Keep only the first 5 words for cleaner search targeting
+  const words = clean.split(' ');
+  if (words.length > 5) {
+    return words.slice(0, 5).join(' ');
+  }
+  
+  return clean;
+}
+
+app.get('/api/external/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q) {
+    res.status(400).json({ error: 'Query parameter "q" is required' });
+    return;
+  }
+
+  const searchQuery = cleanSearchQuery(q) || q;
+  const results = [];
+
+  // 1. Mercado Libre
+  try {
+    const mlUrl = `https://api.mercadolibre.com/sites/MLM/search?q=${encodeURIComponent(searchQuery)}&limit=5`;
+    const mlResponse = await fetch(mlUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    if (mlResponse.ok) {
+      const data = await mlResponse.json();
+      if (data.results && data.results.length > 0) {
+        const result = data.results.find(r => r.price && Number(r.price) > 0);
+        if (result) {
+          results.push({
+            store: 'Mercado Libre',
+            name: result.title,
+            price: Number(result.price),
+            url: result.permalink,
+          });
+        }
+      }
+    } else {
+      console.warn(`Mercado Libre API returned status ${mlResponse.status}`);
+    }
+  } catch (err) {
+    console.error('Error fetching Mercado Libre from backend:', err);
+  }
+
+  // 2. Elektra
+  try {
+    const elUrl = `https://www.elektra.mx/api/catalog_system/pub/products/search?ft=${encodeURIComponent(searchQuery)}`;
+    const elResponse = await fetch(elUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    if (elResponse.ok) {
+      const data = await elResponse.json();
+      if (data && data.length > 0) {
+        for (const product of data) {
+          let price = null;
+          if (product.items) {
+            for (const item of product.items) {
+              if (item.sellers) {
+                for (const seller of item.sellers) {
+                  const offer = seller?.commertialOffer;
+                  if (offer && offer.IsAvailable && offer.Price > 0) {
+                    price = Number(offer.Price);
+                    break;
+                  }
+                }
+              }
+              if (price !== null) break;
+            }
+          }
+
+          if (price !== null) {
+            results.push({
+              store: 'Elektra',
+              name: product.productName,
+              price,
+              url: product.link,
+            });
+            break;
+          }
+        }
+      }
+    } else {
+      console.warn(`Elektra API returned status ${elResponse.status}`);
+    }
+  } catch (err) {
+    console.error('Error fetching Elektra from backend:', err);
+  }
+
+  res.json({ results });
+});
+
 if (emailAlertsEnabled && emailAlertIntervalMinutes > 0) {
   const intervalMs = emailAlertIntervalMinutes * 60 * 1000;
   emailAlertIntervalId = setInterval(async () => {

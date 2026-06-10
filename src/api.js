@@ -164,3 +164,25 @@ export function openCheckoutAppleCalendar(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export async function searchMercadoLibre(query) {
+  try {
+    const data = await request(`/api/external/search?q=${encodeURIComponent(query)}`);
+    const results = data.results || [];
+    return results.find(r => r.store === 'Mercado Libre') || null;
+  } catch (error) {
+    console.warn('Error fetching Mercado Libre price via backend:', error);
+    return null;
+  }
+}
+
+export async function searchElektra(query) {
+  try {
+    const data = await request(`/api/external/search?q=${encodeURIComponent(query)}`);
+    const results = data.results || [];
+    return results.find(r => r.store === 'Elektra') || null;
+  } catch (error) {
+    console.warn('Error fetching Elektra price via backend:', error);
+    return null;
+  }
+}
