@@ -101,7 +101,14 @@ function LoginPage({ onLogin, onClose }) {
           </label>
 
           <div className="flex justify-end">
-            <span className="text-sm font-semibold text-[#4B73F8]">¿Olvidaste tu contraseña?</span>
+            <a
+              href="https://accounts.kueski.com/u/reset-password/request/Username-Password-Authentication?state=hKFo2SBNaWdxNU80Y0p6d25rWlM1c0lodDNyQ1lFRVNkY09ocqFurnJlc2V0LXBhc3N3b3Jko3RpZNkgcmtlLUlzUFVrcGhDSk9SZ3Y1ejlaMHZhOGtzTk14bmajY2lk2SB0NVpEYTZ2a2NDUnJuYzVqcjNLN21sOVg2VU9XSXJDcQ"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-semibold text-[#4B73F8] hover:underline"
+            >
+              ¿Olvidaste tu contraseña?
+            </a>
           </div>
 
           { /*
@@ -134,13 +141,14 @@ function LoginPage({ onLogin, onClose }) {
 
           <div className="pt-4 text-center text-sm font-medium text-[#20212A]">
             <span>¿Aún no tienes cuenta?</span>{' '}
-            <button
-              type="button"
-              disabled
-              className="font-bold text-[#4B73F8] disabled:cursor-default disabled:opacity-100"
+            <a
+              href="https://accounts.kueski.com/u/signup?state=hKFo2SBhOUw5dE9abTFXNnhKXzREM1NlTWZzT2lNZGlBenZVS6Fur3VuaXZlcnNhbC1sb2dpbqN0aWTZIDc0SjVlT2VhcDlVR2FQOVNzU2VHZVlqeFpYQzhCMWJNo2NpZNkgbkpiYnpvSmtqRDBsSThRRFhyMzZtYUJUT0lpNmVRek0"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold text-[#4B73F8] hover:underline"
             >
               Crear una cuenta
-            </button>
+            </a>
           </div>
         </form>
       </main>
